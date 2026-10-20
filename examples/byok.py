@@ -34,7 +34,8 @@ router = JevRouter(
     },
     lanes=Lanes(auto=0.85, llm=0.60),
     classifier=JevClassifier(),
-    fallback=LangChainFallback("openai:gpt-4.1-mini", temperature=0),
+    # Cheapest OpenAI text model on 2026-10-20; it is a reasoning model, so no temperature.
+    fallback=LangChainFallback("openai:gpt-5-nano"),
 )
 
 builder = StateGraph(State)

@@ -44,7 +44,8 @@ sentido ligados à sua configuração.
 
 - [x] Classificador TypeSafe (`Choice` com `routes` como critérios) e fallback LangChain
   (`jev_lanes.adapters`), testados offline com fakes.
-- [ ] Verificar os adaptadores contra os serviços reais (teste opt-in, fora da suíte padrão).
+- [x] Teste opt-in contra os serviços reais (`tests/live/`, `JEV_RUN_LIVE=1`): 4 testes
+  passaram em 2026-10-20 com TypeSafe e `gpt-5-nano`, em casos inequívocos.
 - [x] Três faixas com validação de rotas e abstenção/escalada do fallback.
 - [x] Nós separados para classificação e interrupção humana.
 - [x] Persistir decisão antes da escalada e registrar `route_trace`.

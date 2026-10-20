@@ -123,8 +123,14 @@ precisa permitir escolher o que é enviado (ver decisões de payload acima).
   para evitar esse passo manual e definir se o histórico entre episódios é preservado.
 - Execução assíncrona (`ainvoke`) fica fora do MVP; o `langchain-typesafe` já implementa
   `ainvoke`, então um adaptador async é viável depois.
-- Os adaptadores só foram testados com fakes; falta verificação contra TypeSafe e um
-  provedor LLM reais, e confirmar que a resposta em texto livre é confiável na prática.
+- Smoke test real (2026-10-20, `tests/live/`): o TypeSafe devolveu `billing` com
+  confiança 1.0 num caso inequívoco e o `gpt-5-nano` respondeu no formato esperado
+  (rota ou `ABSTAIN`), inclusive abstendo-se num texto sem sentido. Foi uma execução com
+  quatro casos fáceis; falta medir a confiabilidade do formato de texto livre e a
+  distribuição de confiança em dados reais e ambíguos.
+- O fallback padrão dos testes live é `openai:gpt-5-nano`, o modelo de texto mais barato
+  da tabela de preços da OpenAI em 2026-10-20. É um modelo de raciocínio e não aceita
+  `temperature=0`; reavaliar a escolha pelo preço quando houver benchmark.
 - Piso e teto de versão de `langchain-typesafe`: a versão mais recente é alfa e pode
   mudar sem aviso; decidir se fixamos um intervalo estreito e como testamos contra ela.
 - Plug and play exige chamadas reais a TypeSafe e a um LLM: definir testes de integração

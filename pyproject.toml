@@ -27,6 +27,8 @@ dependencies = [
 
 [dependency-groups]
 dev = ["pytest>=8.3,<10", "ruff>=0.11,<1"]
+# Provider package for the opt-in live tests; end users install their own provider.
+live = ["langchain-openai>=1,<2"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/jev_lanes"]
@@ -34,6 +36,7 @@ packages = ["src/jev_lanes"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config"
+markers = ["live: calls real services with your own keys; run with JEV_RUN_LIVE=1"]
 
 [tool.ruff]
 target-version = "py310"
@@ -41,3 +44,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Case texts and report strings are data; wrapping them would hurt readability.
+"benchmarks/*.py" = ["E501"]

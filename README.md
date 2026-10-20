@@ -6,8 +6,10 @@ Confidence-based routing and escalation policies for Jev and LangGraph.
 serializable `RouteTrace`, the `Classifier`/`FallbackModel` protocols, offline fakes and
 `JevRouter`, which wires the three lanes and a resumable human review into a LangGraph
 `StateGraph`, plus default adapters for TypeSafe and any LangChain chat model (bring your
-own keys). The adapters are tested offline with fakes only; they have not been run
-against the live services, and `langchain-typesafe` itself is an alpha release. The working name is provisional; this project has not been published.
+own keys). The offline suite uses fakes; an opt-in smoke test (`tests/live/`, see
+Contributing) ran once against TypeSafe and `gpt-5-nano` on unambiguous cases. That
+shows the integration works, not that decisions are good, and `langchain-typesafe`
+itself is an alpha release. The working name is provisional; this project has not been published.
 
 ## Why
 
@@ -90,7 +92,7 @@ router = JevRouter(
     routes={"orders": "...", "billing": "...", "other": "Anything else."},
     lanes=Lanes(auto=0.85, llm=0.60),
     classifier=JevClassifier(),  # reads TYPESAFE_API_KEY
-    fallback=LangChainFallback("openai:gpt-4.1-mini", temperature=0),
+    fallback=LangChainFallback("openai:gpt-5-nano"),
 )
 ```
 

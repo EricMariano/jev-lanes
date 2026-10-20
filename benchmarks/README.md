@@ -3,6 +3,12 @@
 Nenhum benchmark foi executado. Testes unitários comprovam a mecânica da política,
 não a qualidade das decisões ou a calibração dos limiares.
 
+Existe uma **bateria de fumaça**, que não é benchmark: `smoke_battery.py` roda 37 casos
+sintéticos rotulados pelos mantenedores contra os serviços reais (com as suas chaves) e
+`make_report.py` gera o relatório em Markdown. O primeiro resultado está em
+[results/2026-10-20-battery.md](results/2026-10-20-battery.md). Serve para ver como as
+peças se comportam, não para estimar acerto.
+
 Antes de divulgar resultados:
 
 - Construir uma amostra rotulada com casos claros, ambíguos e fora do escopo.

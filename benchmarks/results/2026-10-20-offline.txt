@@ -1,0 +1,21 @@
+=== Python 3.10
+Python 3.10.22
+All checks passed!
+27 files already formatted
+114 passed, 4 skipped, 1 warning in 1.35s
+policy example: ok
+router_offline example: ok
+=== Python 3.11
+Python 3.11.14
+All checks passed!
+27 files already formatted
+114 passed, 4 skipped, 1 warning in 1.30s
+policy example: ok
+router_offline example: ok
+=== Python 3.14
+Python 3.14.4
+All checks passed!
+27 files already formatted
+114 passed, 4 skipped, 1 warning in 1.75s
+policy example: ok
+router_offline example: ok

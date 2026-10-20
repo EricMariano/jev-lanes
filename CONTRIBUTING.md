@@ -18,6 +18,21 @@ uv build
 Commit `uv.lock` when changing development dependencies. Keep code and public
 examples in English, with type annotations compatible with Python 3.10.
 
+## Live tests (optional, your own keys)
+
+`tests/live/` calls TypeSafe and an OpenAI model and may cost money, so it is skipped
+unless `JEV_RUN_LIVE=1`. Put `TYPESAFE_API_KEY` and `OPENAI_API_KEY` in a git-ignored
+`.env` and run:
+
+```bash
+uv sync --locked --dev --group live
+JEV_RUN_LIVE=1 uv run --env-file .env --no-sync pytest tests/live -s
+```
+
+The default fallback model is `openai:gpt-5-nano`; set `JEV_LIVE_FALLBACK_MODEL` to use
+another `init_chat_model` string. These are smoke tests on unambiguous cases: they check
+the integration, not decision quality.
+
 ## Tests and evidence
 
 The default test suite must run without credentials, provider calls or network
