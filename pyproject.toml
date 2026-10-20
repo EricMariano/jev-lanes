@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jev-lanes"
-version = "0.1.0.dev0"
+version = "0.1.0rc1"
 description = "Confidence-based routing and escalation policies for Jev and LangGraph."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,10 +12,15 @@ license = "MIT"
 license-files = ["LICENSE"]
 keywords = ["jev", "typesafe", "langgraph", "routing", "human-in-the-loop"]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
 dependencies = [
@@ -29,6 +34,12 @@ dependencies = [
 dev = ["pytest>=8.3,<10", "ruff>=0.11,<1"]
 # Provider package for the opt-in live tests; end users install their own provider.
 live = ["langchain-openai>=1,<2"]
+notebook = ["ipykernel>=6,<8", "nbclient>=0.10,<1", "nbformat>=5,<6"]
+
+[project.urls]
+Repository = "https://github.com/EricMariano/jev-lanes"
+Issues = "https://github.com/EricMariano/jev-lanes/issues"
+Changelog = "https://github.com/EricMariano/jev-lanes/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/jev_lanes"]

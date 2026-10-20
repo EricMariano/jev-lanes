@@ -1,0 +1,59 @@
+name: Publish release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.13.1"
+          python-version: "3.10"
+          enable-cache: true
+      - run: uv sync --locked --dev --group notebook
+      - name: Match release tag to package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          uv run --offline --no-sync python - <<'PY'
+          import os
+          from importlib.metadata import version
+          assert os.environ["RELEASE_TAG"] == f"v{version('jev-lanes')}"
+          PY
+      - run: uv run --offline --no-sync ruff check .
+      - run: uv run --offline --no-sync ruff format --check .
+      - run: uv run --offline --no-sync pytest
+      - run: uv run --offline --no-sync python examples/policy.py
+      - run: uv run --offline --no-sync python examples/router_offline.py
+      - run: uv run --offline --no-sync python examples/atendimento/demo.py
+      - run: uv run --offline --no-sync python examples/manual_routing.py
+      - run: uv run --offline --no-sync python examples/execute_notebook.py
+      - run: uv build
+      - run: uvx --from 'twine>=7,<8' twine check --strict dist/*
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distributions
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/jev-lanes/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1

@@ -1,6 +1,12 @@
 # Plano de implementação
 
-## Etapa atual — Fundação
+## Estado atual — Candidata v0.1 (`0.1.0rc1`)
+
+Atualizado em 2026-10-20. A implementação do fluxo está concluída. A avaliação com
+dados reais e a publicação no PyPI são etapas externas ainda pendentes; o pacote
+continua experimental, com limiares ilustrativos.
+
+## Fundação
 
 - [x] Estrutura Python empacotável, licença MIT e Git local.
 - [x] Seleção pura de faixa com limiares explícitos.
@@ -8,24 +14,32 @@
 - [x] Configuração de lint, formatação e CI para Python 3.10–3.14.
 - [x] ADRs, glossário e registro de questões em aberto.
 
-O workflow está configurado; sua execução no GitHub depende de um repositório remoto.
+O repositório remoto é `EricMariano/jev-lanes`. O CI da base passou no GitHub em
+2026-10-20; as novas verificações precisam passar no commit da candidata.
 
 Verificação local inicial em 2026-10-19: 30 testes passaram em Python 3.10.22 e
 3.14.4, sem chamadas externas durante os testes. Ruff (lint e formatação), exemplo
 de política e build de wheel/sdist passaram. A instalação de ferramentas e
-dependências usou rede. Python 3.11–3.13 está na matriz de CI, ainda sem execução local.
+dependências usou rede.
 
-## Próxima etapa — Contratos do MVP
+Verificação da candidata em 2026-10-20: 132 testes passaram em Python 3.10.22,
+3.11.14, 3.12.15, 3.13.16 e 3.14.4; os quatro testes live foram pulados intencionalmente.
+As demos e o notebook executaram sem provedores reais. Ruff e validação estrita das
+distribuições passaram; o wheel também foi instalado em ambiente limpo, com execução
+das quatro demos offline fora do checkout. Instalação de ferramentas e dependências
+usou rede; a validação não repetiu as chamadas pagas da bateria histórica.
 
-- [ ] Fechar as questões restantes do [registro de decisões](DECISIONS.md).
+## Contratos do MVP
+
+- [x] Fechar contratos necessários ao MVP; extensões estão separadas em DECISIONS.md.
 - [x] Rastro auditável serializável (`RouteTrace`, `Evaluation`) com validação das sequências.
-- [ ] Definir estado e identidade do roteador (esquema exato da chave de estado).
+- [x] Estado e identidade: `<name>_route`, sem reducer, substituído a cada episódio.
 - [x] Interfaces injetáveis para classificador e fallback (`Classifier`, `FallbackModel`).
 - [x] Fakes determinísticos sem rede (`FakeJevClassifier`, `FakeFallback`).
 - [x] Confirmar versões e API oficial (ver DECISIONS); reconferir antes de fixar versões.
-- [ ] Implementações padrão BYOK: classificador TypeSafe e fallback com chat model LangChain.
+- [x] Implementações padrão BYOK: classificador TypeSafe e fallback com chat model LangChain.
 
-Módulos existentes e previstos:
+Módulos existentes:
 
 ```text
 src/jev_lanes/
@@ -52,12 +66,25 @@ sentido ligados à sua configuração.
 - [x] Provar em teste que retomar o nó humano não chama Jev novamente.
 - [x] Testar resposta inválida, falhas de provedor e isolamento de estado.
 - [x] `FakeJevClassifier` e testes de integração offline com LangGraph real.
-- [ ] Exemplo de atendimento com checkpointer e retomada humana.
-- [ ] Notebook executável de cinco minutos.
-- [ ] README com diagrama, instalação e exemplo mínimo que realmente funcionem.
-- [ ] Comparação manual versus `attach()` sobre comportamentos equivalentes.
-- [ ] Avaliação rotulada separada de testes mecânicos e claims de desempenho.
-- [ ] Preparar publicação PyPI após fechar nome e metadados.
+- [x] Exemplo de atendimento com checkpointer, resposta inválida e retomada humana.
+- [x] Notebook de cinco minutos, executor e job de CI próprios, sem chamadas externas.
+- [x] README com diagrama, instalação local e exemplos executáveis.
+- [x] Comparação manual versus `attach()`: 18 cenários de comportamento equivalente.
+- [x] Bateria sintética rotulada registrada separadamente dos testes mecânicos, sem
+  claims de desempenho; protocolo de avaliação real em `benchmarks/README.md`.
+- [x] Preparar candidata: versão/metadados, changelog, lockfile e workflow de publicação
+  por Trusted Publishing, com instruções em `docs/RELEASE.md`.
+
+## Pendências externas para publicação e validação de qualidade
+
+- [ ] Confirmar o nome no momento da publicação e configurar o Trusted Publisher na
+  conta PyPI, com o ambiente `pypi` protegido no GitHub.
+- [ ] Publicar a versão revisada após CI verde, tag e aprovação do mantenedor.
+- [ ] Obter mensagens reais anonimizadas e rótulos independentes, definir o objetivo
+  operacional, separar calibração/teste e medir acerto/cobertura/custo/latência.
+
+Não há dados reais rotulados neste repositório. Os 37 casos sintéticos mostram
+funcionamento e limitações, sem comprovar benefício do fallback ou calibração.
 
 ## v0.2 — Extensões candidatas
 
