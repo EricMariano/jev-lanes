@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-20",
+  "split": "calibration",
+  "per_intent": 3,
+  "limit": null,
+  "seed": 20261020,
+  "cases": 231,
+  "fallback_model": "openai:gpt-5-nano",
+  "typesafe_model": "jev-latest",
+  "langchain_typesafe": "0.0.1a3",
+  "jev_lanes": "0.1.0rc1",
+  "routes": {
+    "cards": "Physical and virtual cards: ordering, delivery, activation, PIN, lost, stolen or compromised cards, cards that do not work, card expiry, and wallets such as Apple Pay.",
+    "payments": "Card payments and cash withdrawals: declined, pending or unrecognised payments, extra or duplicate charges, wrong cash amounts, and refunds.",
+    "transfers": "Bank transfers and top-ups: sending, receiving or cancelling transfers, failed or pending transfers, transfer fees and timing, and topping up the account by card, bank transfer or cash.",
+    "account": "The customer's account and identity: personal details, closing the account, passcode, identity and source-of-funds verification, and a lost phone."
+  },
+  "workers": 4
+}

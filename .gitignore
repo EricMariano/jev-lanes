@@ -13,3 +13,6 @@ build/
 !.env.example
 .ipynb_checkpoints/
 .DS_Store
+
+# Downloaded public datasets (see benchmarks/banking77/README.md)
+benchmarks/data/
