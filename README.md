@@ -231,11 +231,9 @@ build backend or network access.
   a five-minute notebook, and a BYOK example that needs keys.
 - `benchmarks/`: synthetic smoke results, the Banking77 evaluation, and the protocol for a
   real-data evaluation in your own domain.
-- [Decisions](docs/DECISIONS.md): accepted choices, open questions and ADR index.
-- [Implementation plan](docs/PLAN.md): MVP and follow-up scope.
 - [Glossary](GLOSSARY.md): domain terminology.
 - [Contributing](CONTRIBUTING.md): local workflow and evaluation expectations.
-- [Changelog](CHANGELOG.md) and [release process](docs/RELEASE.md).
+- [Changelog](CHANGELOG.md).
 
 ## Naming and related work
 

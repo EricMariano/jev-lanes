@@ -1,7 +1,7 @@
 # Contributing
 
 This project is in early development. Discuss changes to routing semantics before
-expanding the public API; accepted architecture decisions live in `docs/adr/`.
+expanding the public API.
 
 ## Local workflow
 

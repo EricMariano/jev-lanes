@@ -2,7 +2,7 @@
 
 Three nodes are added per router: classification, the fallback model, and a human review
 that calls ``interrupt()``. Classification runs in its own node, so resuming the human
-review never classifies again (see ADR 0002). Everything the router stores in the graph
+review never classifies again. Everything the router stores in the graph
 state lives under one key, ``state_key``, as ``RouteTrace.to_dict()``.
 """
 
