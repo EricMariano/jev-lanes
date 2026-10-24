@@ -24,4 +24,4 @@ First local release candidate; not yet published to PyPI.
 Limitations: synchronous execution only; confidence thresholds are not calibrated;
 the synthetic battery does not establish accuracy or fallback benefit. The TypeSafe
 integration is an alpha dependency. Real-data evaluation and PyPI account configuration
-remain release follow-ups; see `docs/RELEASE.md` and `benchmarks/README.md`.
+remain release follow-ups; see `benchmarks/README.md`.
