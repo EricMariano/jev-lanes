@@ -1,7 +1,7 @@
 import pytest
 
-from jev_lanes import Classification, Classifier, FallbackModel
-from jev_lanes.testing import FakeFallback, FakeJevClassifier
+from jev_lanes import Classification, Classifier
+from jev_lanes.testing import FakeJevClassifier
 
 ROUTES = {"orders": "Order status questions", "billing": "Invoices and payments"}
 
@@ -55,21 +55,3 @@ class TestFakeJevClassifier:
         with pytest.raises(RuntimeError, match="no scripted result"):
             fake.classify("x", ROUTES)
         assert len(fake.calls) == 1
-
-
-class TestFakeFallback:
-    def test_satisfies_the_fallback_protocol(self):
-        assert isinstance(FakeFallback(), FallbackModel)
-
-    def test_returns_route_or_abstains_in_order(self):
-        fake = FakeFallback("billing", None)
-        assert fake.decide("x", ROUTES) == "billing"
-        assert fake.decide("y", ROUTES) is None
-        assert [call.payload for call in fake.calls] == ["x", "y"]
-
-    def test_raises_scripted_exception_and_fails_when_exhausted(self):
-        fake = FakeFallback(ConnectionError("down"))
-        with pytest.raises(ConnectionError):
-            fake.decide("x", ROUTES)
-        with pytest.raises(RuntimeError, match="no scripted result"):
-            fake.decide("x", ROUTES)
