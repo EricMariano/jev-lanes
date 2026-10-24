@@ -9,7 +9,9 @@ serializable `RouteTrace`, the `Classifier`/`FallbackModel` protocols, offline f
 own keys). Offline examples and a five-minute notebook demonstrate the full flow.
 The [37-case synthetic smoke battery](benchmarks/results/2026-10-20-battery.md)
 shows integration behavior; it does not establish decision quality or calibrated
-thresholds. `langchain-typesafe` itself is an alpha release. The package has not been
+thresholds. A [Banking77 evaluation](benchmarks/results/banking77/report.md) of the
+policy on public data found no benefit from the fallback model (see
+[Evidence](#evidence)). `langchain-typesafe` itself is an alpha release. The package has not been
 published to PyPI; install from this checkout.
 
 ## Why
@@ -38,7 +40,8 @@ flowchart LR
     H -->|resume with valid route| R
 ```
 
-The fallback model's benefit must be evaluated. A valid route name alone does not
+The fallback model's benefit must be evaluated; the one evaluation so far did not show one
+(see [Evidence](#evidence)). A valid route name alone does not
 establish a correct decision. Jev confidence is a distribution statistic, not an
 accuracy guarantee; thresholds depend on the task and its consequences.
 
@@ -113,7 +116,9 @@ assert result["handled_by"] == "orders"
 - By default the state's `messages` are sent to the providers; pass `extract=` to send
   something else or to redact. Case text is never stored in the trace or in the
   review request.
-- The fallback model abstaining or naming an unknown route escalates to human review.
+- The fallback model abstaining or naming an unknown route escalates to human review; an
+  unknown answer is recorded in the trace as `<invalid route>`, not verbatim.
+- Each router attached to a graph needs its own `name`.
   Provider failures raise; they are not converted into a low confidence.
 - Human review needs a checkpointer and a stable `thread_id`. Resume with
   `Command(resume="<route>")`; an unknown route is rejected and can be sent again.
@@ -174,6 +179,28 @@ is not run in CI.
 The fallback model is asked for a route name or `ABSTAIN` in plain text, and the reply
 is checked against your routes: anything else escalates to human review.
 
+## Evidence
+
+The policy was evaluated once on [Banking77](https://huggingface.co/datasets/PolyAI/banking77)
+(English banking intents grouped into four routes; thresholds chosen on 231 calibration
+cases, then applied once to 770 test cases; `gpt-5-nano` as fallback). Full method, tables
+and limitations: [report](benchmarks/results/banking77/report.md).
+
+- Jev's confidence is informative: AUROC 0.884 for correct vs wrong routes.
+- The 95% automatic-accuracy target was not reached on calibration. At the chosen
+  thresholds the three-lane policy automated 77.4% of cases at 90.6% accuracy; Jev plus
+  human review (no fallback) automated 57.5% at 94.4%.
+- **The fallback did not help.** In the llm lane Jev was right on 25 of 30 in-scope cases
+  and the fallback on 23 (0 fixed, 2 broken). Below the auto threshold overall, it fixed 12
+  and broke 16 (sign test p = 0.57). Treat the fallback as an unproven option: measure it
+  on your own labelled data before relying on it, and prefer sending medium-confidence
+  cases to people if reviewers have capacity.
+- Out-of-scope messages were still routed automatically when Jev was confident.
+
+One dataset, one run, one fallback model, English only: this is not an accuracy claim for
+your domain. Public data are shared under CC BY 4.0; see the
+[attribution](benchmarks/banking77/README.md#attribution).
+
 ## The lane policy
 
 Thresholds must satisfy `0 <= llm < auto <= 1`. Equality with either threshold
@@ -186,6 +213,7 @@ services; only the providers you inject do.
 ```bash
 uv run --offline --no-sync ruff check .
 uv run --offline --no-sync ruff format --check .
+uv run --offline --no-sync mypy
 uv run --offline --no-sync pytest
 uv build
 ```
@@ -201,7 +229,8 @@ build backend or network access.
 - `tests/`: deterministic offline tests.
 - `examples/`: policy, offline router, customer-service and manual wiring examples,
   a five-minute notebook, and a BYOK example that needs keys.
-- `benchmarks/`: synthetic smoke results and the protocol for a separate real-data evaluation.
+- `benchmarks/`: synthetic smoke results, the Banking77 evaluation, and the protocol for a
+  real-data evaluation in your own domain.
 - [Decisions](docs/DECISIONS.md): accepted choices, open questions and ADR index.
 - [Implementation plan](docs/PLAN.md): MVP and follow-up scope.
 - [Glossary](GLOSSARY.md): domain terminology.

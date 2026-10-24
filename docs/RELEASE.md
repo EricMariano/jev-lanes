@@ -10,6 +10,7 @@ remains experimental: a release candidate is not a decision-quality guarantee.
 uv sync --locked --dev --group notebook
 uv run --offline --no-sync ruff check .
 uv run --offline --no-sync ruff format --check .
+uv run --offline --no-sync mypy
 uv run --offline --no-sync pytest
 uv run --offline --no-sync python examples/policy.py
 uv run --offline --no-sync python examples/router_offline.py
