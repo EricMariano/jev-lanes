@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
+authors = [{ name = "Eric Mariano" }]
 keywords = ["jev", "typesafe", "langgraph", "routing", "human-in-the-loop"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -31,12 +32,15 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.3,<10", "ruff>=0.11,<1"]
+dev = ["mypy>=1.13,<3", "pytest>=8.3,<10", "ruff>=0.11,<1"]
 # Provider package for the opt-in live tests; end users install their own provider.
 live = ["langchain-openai>=1,<2"]
 notebook = ["ipykernel>=6,<8", "nbclient>=0.10,<1", "nbformat>=5,<6"]
 
 [project.urls]
+Homepage = "https://github.com/EricMariano/jev-lanes"
+Documentation = "https://github.com/EricMariano/jev-lanes#readme"
+Security = "https://github.com/EricMariano/jev-lanes/blob/main/SECURITY.md"
 Repository = "https://github.com/EricMariano/jev-lanes"
 Issues = "https://github.com/EricMariano/jev-lanes/issues"
 Changelog = "https://github.com/EricMariano/jev-lanes/blob/main/CHANGELOG.md"
@@ -48,6 +52,11 @@ packages = ["src/jev_lanes"]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config"
 markers = ["live: calls real services with your own keys; run with JEV_RUN_LIVE=1"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src"]
+strict = true
 
 [tool.ruff]
 target-version = "py310"

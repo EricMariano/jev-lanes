@@ -11,6 +11,7 @@ Use Python 3.10+ and uv:
 uv sync --locked --dev
 uv run --offline --no-sync ruff check .
 uv run --offline --no-sync ruff format --check .
+uv run --offline --no-sync mypy
 uv run --offline --no-sync pytest
 uv build
 ```
