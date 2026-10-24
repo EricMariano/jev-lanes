@@ -5,13 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "jev-lanes"
 version = "0.1.0rc1"
-description = "Confidence-based routing and escalation policies for Jev and LangGraph."
+description = "Confidence-gated tools for LangGraph agents, with Jev as the classifier."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Eric Mariano" }]
-keywords = ["jev", "typesafe", "langgraph", "routing", "human-in-the-loop"]
+keywords = ["jev", "typesafe", "langgraph", "langchain", "agents", "tool-calling", "confidence"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

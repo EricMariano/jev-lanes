@@ -52,6 +52,30 @@ and the three-lane policy by replaying the recorded answers (the fallback never 
 answer). A finished case is skipped on re-run. The report on a pilot is a smoke check only:
 pass the pilot as both calibration and test and do not quote the numbers.
 
+## Gate evaluation (`GatedAgent`)
+
+Replays the confidence gate of `GatedAgent` on the same test sample: act only when Jev is
+confident enough, otherwise ask the customer and classify the conversation again. It reuses
+the first Jev answers in `../results/banking77/test.jsonl` and needs only Jev, no LLM. The
+design is frozen in `config.py` (question, number of rounds, primary threshold).
+
+```bash
+# pilot: 50 cases, ~100 Jev calls
+uv run --env-file .env --no-sync python benchmarks/banking77/clarify.py \
+    --source test --limit 50 --name clarify-pilot
+# full: every test case with first confidence < 1.0 (327), two rounds each
+uv run --env-file .env --no-sync python benchmarks/banking77/clarify.py --source test
+uv run --no-sync python benchmarks/banking77/gate_report.py   # offline replay
+```
+
+The simulated reply to the question is another Banking77 **train** message of the same intent,
+so it restates the problem in new words. This favours asking: read the limitations in
+[`../results/banking77/gate-report.md`](../results/banking77/gate-report.md). The pilot file
+is a smoke check and is not used by the report.
+
+`run.py` and `../smoke_battery.py` are archived: they reproduce the earlier three-lane
+evaluation and need the commit named in their docstrings. Their recorded results stay valid.
+
 ## Attribution
 
 The evaluation uses **Banking77**, released by PolyAI under the
@@ -65,8 +89,8 @@ The evaluation uses **Banking77**, released by PolyAI under the
 Changes made by this project: we sampled subsets of the train and test files (seeded and
 stratified, see `run.py`), grouped intents into four routes and held out 11 intents (see
 `config.py`). The files in `../results/banking77/` (`*.jsonl`) contain the text of the
-sampled messages together with their original intent labels and the answers of the models
-under test. They are shared under the same license, and the dataset authors are not
+sampled messages (and, in `clarify-*.jsonl`, the train messages used as simulated replies)
+together with their original intent labels and the answers of the models under test. They are shared under the same license, and the dataset authors are not
 responsible for the models' outputs or for our grouping. This is an independent project and
 is not endorsed by PolyAI or the dataset authors.
 

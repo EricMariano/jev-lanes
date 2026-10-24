@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import Any
+
+from langchain_core.callbacks import CallbackManagerForLLMRun
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
+from pydantic import Field
 
 from jev_lanes.protocols import Classification
-
-T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -19,42 +23,65 @@ class Call:
     routes: Mapping[str, str]
 
 
-class _Scripted(Generic[T]):
-    """Plays scripted results in order; an ``Exception`` in the script is raised."""
+class FakeJevClassifier:
+    """Classifier that returns scripted ``Classification`` objects in order.
 
-    def __init__(self, results: tuple[T | Exception, ...]) -> None:
+    Pass an ``Exception`` to simulate a provider failure. ``calls`` records every call, so
+    tests can prove when the gate classified and when it did not.
+    """
+
+    def __init__(self, *results: Classification | Exception) -> None:
         self._results = list(results)
         self.calls: list[Call] = []
 
-    def _next(self, payload: object, routes: Mapping[str, str]) -> T:
+    def classify(self, payload: object, routes: Mapping[str, str]) -> Classification:
         self.calls.append(Call(payload, dict(routes)))
         if not self._results:
-            raise RuntimeError(f"{type(self).__name__} has no scripted result left")
+            raise RuntimeError("FakeJevClassifier has no scripted result left")
         result = self._results.pop(0)
         if isinstance(result, Exception):
             raise result
         return result
 
 
-class FakeJevClassifier(_Scripted[Classification]):
-    """Classifier that returns scripted ``Classification`` objects in order.
+class FakeChatModel(BaseChatModel):
+    """Chat model that replies with scripted messages in order.
 
-    Pass an ``Exception`` to simulate a provider failure. ``calls`` records every call, so
-    tests can prove that a resumed human review did not classify again.
+    Items are ``AIMessage`` objects, plain strings (turned into an ``AIMessage``), or an
+    ``Exception`` to raise. ``bind_tools`` returns the model itself. ``received`` records the
+    messages of every call.
     """
 
-    def __init__(self, *results: Classification | Exception) -> None:
-        super().__init__(results)
+    script: list[Any] = Field(default_factory=list)
+    received: list[list[BaseMessage]] = Field(default_factory=list)
 
-    def classify(self, payload: object, routes: Mapping[str, str]) -> Classification:
-        return self._next(payload, routes)
+    def __init__(self, *script: AIMessage | str | Exception) -> None:
+        super().__init__(script=list(script))  # type: ignore[call-arg]
+
+    @property
+    def _llm_type(self) -> str:
+        return "jev-lanes-fake"
+
+    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> FakeChatModel:
+        return self
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        self.received.append(list(messages))
+        if not self.script:
+            raise RuntimeError("FakeChatModel has no scripted reply left")
+        item = self.script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        message = AIMessage(item) if isinstance(item, str) else item
+        return ChatResult(generations=[ChatGeneration(message=message)])
 
 
-class FakeFallback(_Scripted[str | None]):
-    """Fallback model that returns scripted route names (``None`` abstains) in order."""
-
-    def __init__(self, *results: str | None | Exception) -> None:
-        super().__init__(results)
-
-    def decide(self, payload: object, routes: Mapping[str, str]) -> str | None:
-        return self._next(payload, routes)
+def tool_call_message(name: str, args: Mapping[str, Any] | None = None, *, id: str) -> AIMessage:
+    """An ``AIMessage`` proposing one tool call, for scripting ``FakeChatModel``."""
+    return AIMessage("", tool_calls=[{"name": name, "args": dict(args or {}), "id": id}])

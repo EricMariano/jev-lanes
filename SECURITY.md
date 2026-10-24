@@ -1,6 +1,6 @@
 # Security policy
 
-`jev-lanes` is an experimental release candidate (`0.1.0rc1`). Only the latest published
+`jev-lanes` is an experimental release candidate and is not published yet. Only the latest
 version receives fixes.
 
 ## Reporting a vulnerability
@@ -14,14 +14,18 @@ guaranteed.
 
 ## Scope and data handling
 
-- The package never calls external services by itself. The providers you inject do:
-  the case text is sent to TypeSafe and, for medium-confidence cases, to your fallback
-  provider. Use `extract=` to restrict or redact what leaves your environment.
+- The package never calls external services by itself. The providers you inject do: the
+  conversation text goes to TypeSafe (the classifier) and to your chat model's provider.
+  By default the classifier receives only customer and assistant text, not tool calls or
+  tool results; use `extract=` to restrict or redact what leaves your environment.
 - Keys are read from the environment by the provider libraries; this package never stores
   or forwards them. Never put keys in issues, logs or example files.
-- `RouteTrace` and the human-review request do not contain the case text. The graph state
-  and checkpoints do (`messages`); their retention is your checkpointer's policy.
-- The fallback model's reply is untrusted. It is matched against your route names, and
-  anything else escalates to human review and is recorded only as a fixed marker.
+- `GateTrace` does not contain message text or tool arguments. The graph state and
+  checkpoints do (`messages`); their retention is your checkpointer's policy.
+- The gate decides whether a tool may run, not with which arguments. The model chooses the
+  arguments and the customer's replies are untrusted input to the model: validate arguments
+  inside each tool and keep irreversible tools behind a high `min_confidence`.
+- Classifier confidence is a statistic, not a security control. Do not use it as the only
+  protection for actions that need authentication or authorization.
 - Out of scope: vulnerabilities in LangGraph, LangChain, TypeSafe or a model provider;
   report those upstream.

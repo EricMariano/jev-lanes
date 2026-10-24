@@ -1,27 +1,32 @@
 # Changelog
 
+## Unreleased
+
+Rewrite around confidence-gated tools. Breaking: nothing from `0.1.0rc1` was ever published.
+
+- `GatedTool`: a LangChain tool plus the intents it serves and its minimum Jev confidence.
+- `GatedAgent`: a LangGraph agent that classifies only when the model proposes a tool call,
+  runs all proposed calls or none, asks the customer a clarifying question through
+  `interrupt()` and refuses with a fixed message after `max_clarifications`.
+- `GateTrace` / `Check`: serializable record of each check (tool, intent, confidence,
+  requirement, outcome) and the questions spent. No message text or tool arguments.
+- `FakeChatModel` and `tool_call_message` for offline tests; `FakeJevClassifier` stays.
+- Customer-service demo run in CI, and a bring-your-own-keys chat.
+- Banking77 gate evaluation (`clarify.py`, `gate_report.py`) with recorded answers and
+  report. Asking recovers some blocked customers but is only slightly better than lowering
+  the threshold, with a simulated customer that favours asking.
+- Removed: `Lanes`, `JevRouter`, `FallbackModel`, `LangChainFallback`, the human-review lane,
+  the notebook and the old examples. The first design's evaluation stays as history: its
+  LLM fallback did not improve Jev's decisions.
+- `benchmarks/banking77/run.py` and `benchmarks/smoke_battery.py` are archived; they need
+  commit `8d07291`.
+
+Limitations: synchronous execution only; confidence requirements are not calibrated; the
+evaluation uses a simulated customer and does not include the agent's language model. The
+TypeSafe integration is an alpha dependency. The unused `notebook` dependency group is kept
+until `uv.lock` is regenerated.
+
 ## 0.1.0rc1 — 2026-10-23
 
-First local release candidate; not yet published to PyPI.
-
-- Explicit confidence bands with validated thresholds and serializable decision traces.
-- Synchronous `JevRouter` with automatic routing, LangChain fallback and resumable human
-  review. Invalid human routes are rejected; resuming does not repeat classification.
-- Injectable classifier and fallback protocols, deterministic fakes, and BYOK TypeSafe
-  and LangChain adapters. Provider failures propagate instead of changing lanes.
-- Offline customer-service demo, executable five-minute notebook and manual wiring
-  example with behavior comparisons against `attach()`.
-- Offline tests, Python 3.10–3.14 CI configuration, opt-in live tests and a recorded
-  37-case synthetic smoke battery.
-- Banking77 evaluation (770 test cases) with its scripts, recorded answers and report, with
-  CC BY 4.0 attribution. Result: the 95% automatic-accuracy target was not reached and the
-  fallback did not improve decisions in the llm lane (0 fixed, 2 broken of 30).
-- `attach()` fails with a clear message when two routers share a name in one graph.
-- A fallback answer that is not a route is recorded as `<invalid route>` in the trace
-  instead of verbatim, so model output cannot leak case text into the trace.
-- mypy (strict) in CI, `SECURITY.md`, Dependabot, issue/PR templates and project URLs.
-
-Limitations: synchronous execution only; confidence thresholds are not calibrated;
-the synthetic battery does not establish accuracy or fallback benefit. The TypeSafe
-integration is an alpha dependency. Real-data evaluation and PyPI account configuration
-remain release follow-ups; see `benchmarks/README.md`.
+First local release candidate of the three-lane router (confidence bands, LangChain fallback
+and resumable human review). Superseded before publication; see the history above.

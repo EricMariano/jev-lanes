@@ -134,3 +134,15 @@ assert set(ROUTES) == set(INTENTS_BY_ROUTE)
 assert len(INTENT_TO_ROUTE) == sum(map(len, INTENTS_BY_ROUTE.values())), "intent in two routes"
 assert not set(INTENT_TO_ROUTE) & set(HELD_OUT), "held-out intent is also routed"
 assert len(INTENT_TO_ROUTE) + len(HELD_OUT) == 77
+
+
+# --- Gate evaluation (clarify.py / gate_report.py), fixed BEFORE any clarification call ---
+# A customer message below the confidence threshold is answered with CLARIFY_QUESTION; the
+# simulated reply is another Banking77 TRAIN message of the same intent (seeded). Jev then
+# classifies the whole conversation again, up to CLARIFY_ROUNDS times.
+CLARIFY_QUESTION = "Could you tell me a bit more about what you need?"
+CLARIFY_ROUNDS = 2
+# The two-lane threshold the earlier calibration picked with the frozen selection rule
+# (report.md); the primary comparison uses it. Other thresholds are a descriptive sweep.
+PRIMARY_THRESHOLD = 0.995
+GATE_GRID = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.995, 1.0]

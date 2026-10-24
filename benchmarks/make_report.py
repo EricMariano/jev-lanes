@@ -1,4 +1,7 @@
-"""Turn a battery JSON into a Markdown report.
+"""ARCHIVED: reports the synthetic smoke battery of the earlier three-lane design (see
+smoke_battery.py).
+
+Turn a battery JSON into a Markdown report.
 
     uv run --no-sync python benchmarks/make_report.py benchmarks/results/<date>-battery.json \
         [--offline path/to/offline-summary.txt] [--notes path/to/notes.md]

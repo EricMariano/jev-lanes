@@ -1,16 +1,35 @@
 # Avaliação — planejamento
 
-Testes unitários comprovam a mecânica da política, não a qualidade das decisões nem a
-calibração dos limiares. Há duas avaliações registradas, ambas com limites claros:
+Testes unitários comprovam a mecânica do gate, não a qualidade das decisões nem a
+calibração das confianças mínimas. Há três avaliações registradas, todas com limites claros:
 
-- **Banking77** ([banking77/README.md](banking77/README.md),
+- **Gate de confiança no Banking77** ([banking77/README.md](banking77/README.md),
+  [relatório](results/banking77/gate-report.md)): repete as respostas gravadas do Jev pela
+  política do `GatedAgent` (agir, perguntar ao cliente ou recusar). Usa um **cliente
+  simulado** que favorece a pergunta, então os ganhos são um limite superior. O limiar
+  principal foi fixado antes da execução; a comparação com "apenas baixar o limiar" foi
+  acrescentada depois de ver os primeiros números.
+- **Banking77, desenho antigo de três faixas** (arquivado,
   [relatório](results/banking77/report.md)): dados públicos em inglês, rótulos dos autores
   do dataset, limiares escolhidos numa amostra de calibração e avaliados uma vez em 770
-  casos de teste, com a mesma estrutura do protocolo abaixo. É uma avaliação em dados
-  públicos de outro domínio, não em mensagens reais do usuário do pacote.
-- **Bateria de fumaça** (abaixo): 37 casos sintéticos, só para ver o comportamento.
+  casos de teste. Os scripts `banking77/run.py` e `smoke_battery.py` exigem o commit
+  `8d07291`; os resultados gravados continuam válidos. É uma avaliação em dados públicos de
+  outro domínio, não em mensagens reais do usuário do pacote.
+- **Bateria de fumaça** (arquivada, abaixo): 37 casos sintéticos, só para ver o comportamento.
 
-### O que o Banking77 mostrou (uma execução, `gpt-5-nano`)
+### O que o gate mostrou (uma execução, cliente simulado)
+
+- No limiar 0,995: agir sempre dá 608 atendimentos corretos e 162 atos nocivos; o gate sem
+  perguntas, 418 e 25; o gate com até duas perguntas, 501 e 41.
+- Perguntar recupera 83 dos 238 clientes bloqueados, sem nenhum na rota errada; os 16 atos
+  nocivos a mais são mensagens fora do escopo, que o Jev empurra para uma das quatro rotas
+  por não haver rota "outros".
+- Contra um gate simples com o mesmo orçamento de atos nocivos, o ganho no limiar principal
+  é de +9 atendidos (IC 95%: −8 a +26), indistinguível de zero; entre 0,7 e 0,95 fica em
+  +19 a +24 (cerca de 2,5–3% dos clientes).
+- Não medido: o modelo de linguagem do agente, clientes reais, outros idiomas e domínios.
+
+### O que o desenho antigo de três faixas mostrou (uma execução, `gpt-5-nano`)
 
 - O alvo de ≥ 95% de acerto automático **não foi atingido** na calibração, com ou sem
   fallback. No teste, três faixas (auto ≥ 0,95, llm ≥ 0,9) automatizaram 77,4% dos casos

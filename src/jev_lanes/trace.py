@@ -1,7 +1,8 @@
-"""Serializable record of a routing episode.
+"""Serializable record of what the gate decided during one turn.
 
-The trace stores who evaluated a case and what they suggested. It never stores the case
-text or raw provider payloads.
+The trace stores which tool calls were checked against which classification, and how many
+clarification rounds were spent. It never stores the case text, tool arguments or model
+output.
 """
 
 from __future__ import annotations
@@ -10,146 +11,103 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
-from jev_lanes.lanes import Lane, _validate_unit_interval
+from jev_lanes._validate import validate_name, validate_unit_interval
 
-Evaluator = Literal["jev", "llm", "human"]
-EscalationReason = Literal["low_confidence", "llm_abstained", "llm_invalid_route"]
-
-# Evaluator sequences a trace may hold for each entry lane. A prefix is a trace that is
-# still waiting for the next evaluator (for example, persisted before a human review).
-_SEQUENCES: dict[str, tuple[tuple[str, ...], ...]] = {
-    "auto": (("jev",),),
-    "llm": (("jev",), ("jev", "llm"), ("jev", "llm", "human")),
-    "human": (("jev",), ("jev", "human")),
-}
-
-
-def _check_route(route: object, *, name: str) -> None:
-    if not isinstance(route, str):
-        raise TypeError(f"{name} must be a string")
-    if not route:
-        raise ValueError(f"{name} must not be empty")
+CheckOutcome = Literal["allowed", "low_confidence", "intent_mismatch"]
 
 
 @dataclass(frozen=True)
-class Evaluation:
-    """One evaluator's suggestion.
+class Check:
+    """One tool call checked against the classifier's reading of the conversation.
 
-    ``route`` is the suggested route name. The router records an LLM answer that is not a
-    route as a fixed marker rather than verbatim, because it is model output and may echo
-    the case. Only the LLM may abstain (``route=None``). ``confidence`` is recorded for Jev only.
-    ``reason`` says why this evaluator was consulted and is ``None`` for the first Jev call.
+    ``intent`` and ``confidence`` come from the classifier; ``required`` is the tool's
+    minimum confidence. ``intent_mismatch`` means the classified intent is not one the tool
+    serves, whatever the confidence; it takes precedence over ``low_confidence``.
     """
 
-    evaluator: Evaluator
-    route: str | None
-    confidence: float | None = None
-    reason: EscalationReason | None = None
+    tool: str
+    intent: str
+    confidence: float
+    required: float
+    outcome: CheckOutcome
 
     def __post_init__(self) -> None:
-        if self.evaluator not in get_args(Evaluator):
-            raise ValueError(f"evaluator must be one of {get_args(Evaluator)}")
-        if self.route is None:
-            if self.evaluator != "llm":
-                raise ValueError("only the llm evaluator may abstain")
-        else:
-            _check_route(self.route, name="route")
-        if self.evaluator == "jev":
-            if self.confidence is None:
-                raise ValueError("a jev evaluation requires confidence")
-            _validate_unit_interval(self.confidence, name="confidence")
-            if self.reason is not None:
-                raise ValueError("a jev evaluation is never an escalation")
-        else:
-            if self.confidence is not None:
-                raise ValueError("only jev evaluations record confidence")
-            if self.reason is None:
-                raise ValueError(f"a {self.evaluator} evaluation requires a reason")
-        if self.reason is not None and self.reason not in get_args(EscalationReason):
-            raise ValueError(f"reason must be one of {get_args(EscalationReason)}")
+        validate_name(self.tool, name="tool")
+        validate_name(self.intent, name="intent")
+        validate_unit_interval(self.confidence, name="confidence")
+        validate_unit_interval(self.required, name="required")
+        if self.outcome not in get_args(CheckOutcome):
+            raise ValueError(f"outcome must be one of {get_args(CheckOutcome)}")
+        if self.outcome == "allowed" and self.confidence < self.required:
+            raise ValueError("an allowed check needs confidence >= required")
+        if self.outcome == "low_confidence" and self.confidence >= self.required:
+            raise ValueError("a low_confidence check needs confidence < required")
+
+    @property
+    def allowed(self) -> bool:
+        return self.outcome == "allowed"
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "evaluator": self.evaluator,
-            "route": self.route,
+            "tool": self.tool,
+            "intent": self.intent,
             "confidence": self.confidence,
-            "reason": self.reason,
+            "required": self.required,
+            "outcome": self.outcome,
         }
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> Evaluation:
-        _check_keys(data, {"evaluator", "route", "confidence", "reason"}, what="evaluation")
+    def from_dict(cls, data: Mapping[str, Any]) -> Check:
+        _check_keys(data, {"tool", "intent", "confidence", "required", "outcome"}, what="check")
         return cls(
-            evaluator=data["evaluator"],
-            route=data["route"],
-            confidence=data.get("confidence"),
-            reason=data.get("reason"),
+            tool=data["tool"],
+            intent=data["intent"],
+            confidence=data["confidence"],
+            required=data["required"],
+            outcome=data["outcome"],
         )
 
 
 @dataclass(frozen=True)
-class RouteTrace:
-    """Evaluations of one routing episode, in order, plus the final route once decided.
+class GateTrace:
+    """Checks made in one turn, in order, plus the clarification rounds spent.
 
-    ``lane`` is the entry lane selected from Jev's confidence. ``final_route`` is ``None``
-    until a decision is accepted, so the trace can be persisted before escalating.
+    ``refused`` is set when the turn ended without the customer's request being served
+    because clarification did not reach the required confidence.
     """
 
-    lane: Lane
-    evaluations: tuple[Evaluation, ...]
-    final_route: str | None = None
+    checks: tuple[Check, ...] = ()
+    clarifications: int = 0
+    refused: bool = False
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "evaluations", tuple(self.evaluations))
-        if self.lane not in _SEQUENCES:
-            raise ValueError(f"lane must be one of {tuple(_SEQUENCES)}")
-        if not all(isinstance(item, Evaluation) for item in self.evaluations):
-            raise TypeError("evaluations must contain Evaluation objects")
-        self._validate_sequence()
-        self._validate_final_route()
-
-    def _validate_sequence(self) -> None:
-        sequence = tuple(item.evaluator for item in self.evaluations)
-        if sequence not in _SEQUENCES[self.lane]:
-            raise ValueError(f"evaluators {sequence} are not valid for lane {self.lane!r}")
-        for index, item in enumerate(self.evaluations[1:], start=1):
-            previous = self.evaluations[index - 1]
-            if item.evaluator == "llm" or previous.evaluator == "jev":
-                expected: tuple[str, ...] = ("low_confidence",)
-            else:
-                expected = ("llm_abstained", "llm_invalid_route")
-            if item.reason not in expected:
-                raise ValueError(f"reason {item.reason!r} is invalid for {item.evaluator} here")
-            if item.reason == "llm_abstained" and previous.route is not None:
-                raise ValueError("llm_abstained requires an abstaining llm evaluation")
-            if item.reason == "llm_invalid_route" and previous.route is None:
-                raise ValueError("llm_invalid_route requires an llm route")
-
-    def _validate_final_route(self) -> None:
-        if self.final_route is None:
-            return
-        _check_route(self.final_route, name="final_route")
-        last = self.evaluations[-1]
-        if last.evaluator == "jev" and self.lane != "auto":
-            raise ValueError("a jev suggestion is accepted only in the auto lane")
-        if self.final_route != last.route:
-            raise ValueError("final_route must be the last evaluation's route")
+        object.__setattr__(self, "checks", tuple(self.checks))
+        if not all(isinstance(item, Check) for item in self.checks):
+            raise TypeError("checks must contain Check objects")
+        if isinstance(self.clarifications, bool) or not isinstance(self.clarifications, int):
+            raise TypeError("clarifications must be an int")
+        if self.clarifications < 0:
+            raise ValueError("clarifications must not be negative")
+        if not isinstance(self.refused, bool):
+            raise TypeError("refused must be a bool")
+        if self.refused and (not self.checks or self.checks[-1].allowed):
+            raise ValueError("a refused turn must end with a check that was not allowed")
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible representation."""
         return {
-            "lane": self.lane,
-            "evaluations": [item.to_dict() for item in self.evaluations],
-            "final_route": self.final_route,
+            "checks": [item.to_dict() for item in self.checks],
+            "clarifications": self.clarifications,
+            "refused": self.refused,
         }
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> RouteTrace:
-        _check_keys(data, {"lane", "evaluations", "final_route"}, what="trace")
+    def from_dict(cls, data: Mapping[str, Any]) -> GateTrace:
+        _check_keys(data, {"checks", "clarifications", "refused"}, what="trace")
         return cls(
-            lane=data["lane"],
-            evaluations=tuple(Evaluation.from_dict(item) for item in data["evaluations"]),
-            final_route=data.get("final_route"),
+            checks=tuple(Check.from_dict(item) for item in data["checks"]),
+            clarifications=data["clarifications"],
+            refused=data["refused"],
         )
 
 

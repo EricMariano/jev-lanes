@@ -1,100 +1,123 @@
-"""Customer-service demo: ``uv run python examples/atendimento/demo.py``.
+"""Offline demo: three conversations through a GatedAgent, with scripted fakes.
 
-All provider responses and human decisions are scripted. No keys or network needed.
+No keys, no network. The scripted classifier plays the part of Jev, so what this shows is
+the wiring (when the agent acts, asks or refuses), not how well Jev classifies.
+
+    python examples/atendimento/demo.py
 """
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import Any
 
+from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
-from pydantic import ValidationError
+from support import INSTRUCTIONS, INTENTS, BackOffice, build_tools
 
-from jev_lanes import Classification, JevRouter, Lanes, RouteTrace
-from jev_lanes.protocols import Classifier, FallbackModel
-from jev_lanes.testing import FakeFallback, FakeJevClassifier
-
-ROUTES = {
-    "orders": "Order status, tracking, delivery and cancellation.",
-    "billing": "Invoices, duplicate charges, payments and refunds.",
-    "account": "Login, password and profile changes.",
-}
+from jev_lanes import Classification, GatedAgent, GateTrace
+from jev_lanes.testing import FakeChatModel, FakeJevClassifier, tool_call_message
 
 
-class SupportState(TypedDict, total=False):
-    messages: list[str]
-    support_route: dict[str, Any]
-    handled_by: str
-    reply: str
-
-
-def build_graph(classifier: Classifier, fallback: FallbackModel) -> Any:
-    """Create a support graph with separate handlers and in-memory checkpoints."""
-    router = JevRouter(
-        name="support",
-        routes=ROUTES,
-        lanes=Lanes(auto=0.85, llm=0.60),  # examples, not calibrated thresholds
+def converse(
+    title: str,
+    model: FakeChatModel,
+    classifier: FakeJevClassifier,
+    office: BackOffice,
+    first_message: str,
+    answers: list[str],
+) -> GateTrace:
+    agent = GatedAgent(
+        model=model,
+        tools=build_tools(office),
+        intents=INTENTS,
         classifier=classifier,
-        fallback=fallback,
+        instructions=INSTRUCTIONS,
+        max_clarifications=2,
     )
-    replies = {
-        "orders": "The orders team will check your delivery.",
-        "billing": "The billing team will review the charge.",
-        "account": "The account team will help restore access.",
-    }
-    builder = StateGraph(SupportState)
-    builder.add_node("intake", lambda state: {})
-    builder.add_edge(START, "intake")
-    for route, reply in replies.items():
-        builder.add_node(
-            route,
-            lambda state, route=route, reply=reply: {"handled_by": route, "reply": reply},
+    graph = agent.compile(InMemorySaver())
+    config: dict[str, Any] = {"configurable": {"thread_id": title}}
+
+    result = graph.invoke({"messages": [HumanMessage(first_message)]}, config)
+    while "__interrupt__" in result:
+        result = graph.invoke(Command(resume=answers.pop(0)), config)
+
+    print(f"\n=== {title} ===")
+    for message in graph.get_state(config).values["messages"]:
+        if isinstance(message, HumanMessage):
+            print(f"customer: {message.text}")
+        elif isinstance(message, ToolMessage):
+            print(f"  [{message.status}: {message.text}]")
+        elif message.tool_calls:
+            call = message.tool_calls[0]
+            print(f"  [model proposes {call['name']}({call['args']})]")
+        else:
+            print(f"agent: {message.text}")
+    trace = GateTrace.from_dict(graph.get_state(config).values["gate"])
+    for check in trace.checks:
+        print(
+            f"  gate: {check.tool} <- {check.intent} {check.confidence:.2f} "
+            f"(needs {check.required:.2f}) {check.outcome}"
         )
-        builder.add_edge(route, END)
-    router.attach(builder, after="intake")
-    return builder.compile(checkpointer=InMemorySaver())
+    return trace
 
 
 def main() -> None:
-    classifier = FakeJevClassifier(
-        Classification("orders", 0.95),
-        Classification("orders", 0.70),
-        Classification("account", 0.30),
-        Classification("orders", 0.70),
+    # 1. Clear request: the read-only tool needs 0.50 and gets 0.93, so it just runs.
+    office = BackOffice()
+    trace = converse(
+        "clear request",
+        FakeChatModel(
+            tool_call_message("order_status", {"order_id": "A100"}, id="c1"),
+            "Order A100 has shipped.",
+        ),
+        FakeJevClassifier(Classification("orders", 0.93)),
+        office,
+        "Where is my order A100?",
+        [],
     )
-    fallback = FakeFallback("billing", None)
-    graph = build_graph(classifier, fallback)
-    cases = (
-        ("auto", "Where is my parcel?", None),
-        ("llm", "I was charged for a cancelled order.", None),
-        ("human", "I cannot log in and need to change my payment card.", "account"),
-        ("abstention", "The order and the payment look wrong.", "billing"),
+    assert trace.clarifications == 0 and not trace.refused
+
+    # 2. Vague request for a refund: 0.62 is below the 0.90 a refund needs, so the agent
+    #    asks. After the answer the classifier is confident and the refund runs.
+    office = BackOffice()
+    trace = converse(
+        "vague, then clear",
+        FakeChatModel(
+            tool_call_message("refund", {"order_id": "A100"}, id="c1"),
+            "Which order is this about, and what went wrong?",
+            tool_call_message("refund", {"order_id": "A100"}, id="c2"),
+            "Done: order A100 is refunded.",
+        ),
+        FakeJevClassifier(Classification("billing", 0.62), Classification("billing", 0.96)),
+        office,
+        "I want my money back.",
+        ["Order A100 arrived broken, please refund it."],
     )
-    for thread_id, message, human_route in cases:
-        config = {"configurable": {"thread_id": thread_id}}
-        calls_before = len(classifier.calls)
-        result = graph.invoke({"messages": [message]}, config)
-        if "__interrupt__" in result:
-            review = result["__interrupt__"][0].value
-            print(f"{thread_id}: paused ({review['reason']}); choose from {list(review['routes'])}")
-            assert "handled_by" not in result  # no handler ran before approval
-            assert graph.get_state(config).next == ("support_human",)
-            # The first reviewer response is deliberately invalid; the same review survives.
-            try:
-                graph.invoke(Command(resume="unknown_team"), config)
-            except ValidationError:
-                print(f"{thread_id}: invalid review rejected; waiting for a valid route")
-            else:
-                raise AssertionError("invalid review should have been rejected")
-            result = graph.invoke(Command(resume=human_route), config)
-        assert len(classifier.calls) == calls_before + 1  # resume never classifies again
-        trace = RouteTrace.from_dict(result["support_route"])
-        print(f"{thread_id}: {result['reply']}")
-        print(f"  lane={trace.lane}; evaluators={[e.evaluator for e in trace.evaluations]}")
-    assert len(fallback.calls) == 2
-    print("All four cases completed; each classified once.")
+    assert office.refunds == ["A100"] and trace.clarifications == 1
+
+    # 3. The customer never makes it clear: after two questions the agent refuses, and the
+    #    irreversible tool never ran.
+    office = BackOffice()
+    trace = converse(
+        "never clear",
+        FakeChatModel(
+            tool_call_message("refund", {"order_id": "A100"}, id="c1"),
+            "Could you tell me which order you mean?",
+            tool_call_message("refund", {"order_id": "A100"}, id="c2"),
+            "What would you like us to do about it?",
+            tool_call_message("refund", {"order_id": "A100"}, id="c3"),
+        ),
+        FakeJevClassifier(
+            Classification("billing", 0.41),
+            Classification("billing", 0.48),
+            Classification("other", 0.55),
+        ),
+        office,
+        "It's about the thing.",
+        ["The thing from before.", "You know."],
+    )
+    assert office.refunds == [] and trace.refused and trace.clarifications == 2
 
 
 if __name__ == "__main__":
