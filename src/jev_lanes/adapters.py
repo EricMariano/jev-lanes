@@ -29,7 +29,7 @@ class JevClassifier:
     def __init__(
         self,
         *,
-        instructions: str = "What does the customer want?",
+        instructions: str = "Which route should handle this case?",
         client: TypeSafeClassifier | None = None,
         **options: Any,
     ) -> None:

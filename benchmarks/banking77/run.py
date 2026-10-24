@@ -1,4 +1,7 @@
-"""Run TypeSafe (Jev) and the fallback model on a stratified Banking77 sample.
+"""ARCHIVED: reproduces the three-lane fallback evaluation and needs jev-lanes at commit 8d07291 (JevRouter, Lanes and
+LangChainFallback were removed afterwards). Its recorded results remain valid history.
+
+Run TypeSafe (Jev) and the fallback model on a stratified Banking77 sample.
 
     uv sync --locked --dev --group live
     uv run --env-file .env --no-sync python benchmarks/banking77/run.py \

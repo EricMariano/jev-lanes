@@ -44,7 +44,7 @@ class TestJevClassifier:
         question = request["questions"]["route"]
         assert question.type == "choice"
         assert question.criteria == ROUTES
-        assert question.instructions == "What does the customer want?"
+        assert question.instructions == "Which route should handle this case?"
 
     def test_custom_instructions(self):
         client = FakeTypeSafe(choice("orders", 0.5))

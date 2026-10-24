@@ -1,4 +1,7 @@
-"""Small labeled battery against the real services. Not a benchmark.
+"""ARCHIVED: reproduces the synthetic smoke battery and needs jev-lanes at commit 8d07291 (JevRouter, Lanes and
+LangChainFallback were removed afterwards). Its recorded results remain valid history.
+
+Small labeled battery against the real services. Not a benchmark.
 
     uv sync --locked --dev --group live
     uv run --env-file .env --no-sync python benchmarks/smoke_battery.py
