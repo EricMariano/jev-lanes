@@ -35,8 +35,9 @@ def _check_route(route: object, *, name: str) -> None:
 class Evaluation:
     """One evaluator's suggestion.
 
-    ``route`` is the suggestion exactly as returned, so it may be an invalid route name;
-    only the LLM may abstain (``route=None``). ``confidence`` is recorded for Jev only.
+    ``route`` is the suggested route name. The router records an LLM answer that is not a
+    route as a fixed marker rather than verbatim, because it is model output and may echo
+    the case. Only the LLM may abstain (``route=None``). ``confidence`` is recorded for Jev only.
     ``reason`` says why this evaluator was consulted and is ``None`` for the first Jev call.
     """
 

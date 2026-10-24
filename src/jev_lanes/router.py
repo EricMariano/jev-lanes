@@ -23,6 +23,10 @@ from jev_lanes.trace import EscalationReason, Evaluation, RouteTrace
 
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*\Z")
 
+# Recorded in the trace instead of a fallback answer that is not a route name: the answer is
+# model output and may echo the case, which the trace must never store.
+INVALID_ROUTE = "<invalid route>"
+
 
 def default_extract(state: Mapping[str, Any]) -> object:
     """Send the state's ``messages`` to the classifier and the fallback model."""
@@ -101,11 +105,15 @@ class JevRouter:
         return {self.state_key: trace.to_dict()}
 
     def llm(self, state: Mapping[str, Any]) -> dict[str, Any]:
-        """Ask the fallback model. Abstaining or naming an unknown route needs human review."""
+        """Ask the fallback model. Abstaining or naming an unknown route needs human review.
+
+        An answer that is not a route name is recorded as ``INVALID_ROUTE``, not verbatim.
+        """
         trace = self._load(state)
         route = self.fallback.decide(self.extract(state), self.routes)
-        evaluation = Evaluation("llm", route, reason="low_confidence")
         accepted = route if route in self.routes else None
+        recorded = route if route is None or accepted else INVALID_ROUTE
+        evaluation = Evaluation("llm", recorded, reason="low_confidence")
         updated = RouteTrace(trace.lane, (*trace.evaluations, evaluation), accepted)
         return {self.state_key: updated.to_dict()}
 
@@ -126,14 +134,14 @@ class JevRouter:
             "routes": dict(self.routes),
             "suggestions": [item.to_dict() for item in trace.evaluations],
         }
-        route = interrupt(review, response_schema=Literal[tuple(self.routes)])  # type: ignore[misc]
+        route = interrupt(review, response_schema=Literal[tuple(self.routes)])  # type: ignore[call-overload]
         evaluation = Evaluation("human", route, reason=reason)
         updated = RouteTrace(trace.lane, (*trace.evaluations, evaluation), route)
         return {self.state_key: updated.to_dict()}
 
     def attach(
         self,
-        builder: StateGraph,
+        builder: StateGraph[Any, Any, Any, Any],
         *,
         after: str,
         targets: Mapping[str, str] | None = None,
@@ -146,6 +154,14 @@ class JevRouter:
         mapping = {route: route for route in self.routes} if targets is None else dict(targets)
         if set(mapping) != set(self.routes):
             raise ValueError("targets must map exactly the router's routes")
+        taken = [
+            n for n in (self.classify_node, self.llm_node, self.human_node) if n in builder.nodes
+        ]
+        if taken:
+            raise ValueError(
+                f"the graph already has nodes {taken}: each router attached to a graph needs "
+                f"its own name (this one is {self.name!r})"
+            )
 
         def next_node(state: Mapping[str, Any]) -> str:
             trace = self._load(state)
@@ -155,9 +171,9 @@ class JevRouter:
                 return self.llm_node
             return self.human_node
 
-        builder.add_node(self.classify_node, self.classify)
-        builder.add_node(self.llm_node, self.llm)
-        builder.add_node(self.human_node, self.human)
+        builder.add_node(self.classify_node, self.classify)  # type: ignore[type-var]
+        builder.add_node(self.llm_node, self.llm)  # type: ignore[type-var]
+        builder.add_node(self.human_node, self.human)  # type: ignore[type-var]
         builder.add_edge(after, self.classify_node)
         destinations = [self.llm_node, self.human_node, *dict.fromkeys(mapping.values())]
         for node in (self.classify_node, self.llm_node, self.human_node):
