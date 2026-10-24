@@ -15,6 +15,14 @@ uv run --offline --no-sync pytest
 uv build
 ```
 
+CI also runs the offline router, customer-service and manual wiring examples. A separate
+notebook job installs the optional `notebook` group and executes every tutorial cell:
+
+```bash
+uv sync --locked --dev --group notebook
+uv run --offline --no-sync python examples/execute_notebook.py
+```
+
 Commit `uv.lock` when changing development dependencies. Keep code and public
 examples in English, with type annotations compatible with Python 3.10.
 
@@ -38,6 +46,10 @@ the integration, not decision quality.
 The default test suite must run without credentials, provider calls or network
 access. Add behavior tests for policy changes and resume/error handling. Dataset
 evaluation belongs outside that suite and must report its methodology.
+
+The manual-wiring comparison uses the same public router nodes with explicit edges;
+it checks graph behavior, not provider quality or performance. Keep real-data evaluation
+separate from the synthetic smoke battery; see `benchmarks/README.md`.
 
 Do not infer accuracy from a confidence threshold or claim savings based only on
 synthetic tests. Distinguish implemented APIs from design proposals in documentation.

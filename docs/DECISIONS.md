@@ -62,7 +62,10 @@ hipóteses de produto e questões em aberto; uma API proposta não é compromiss
   vários roteadores no mesmo grafo.
 - Nome de trabalho: **jev-lanes**, import `jev_lanes`. O diretório local permanece `langgraph-jev`.
 - README e código em inglês para colaboração pública; decisões iniciais em português.
-- Nenhuma publicação no GitHub ou PyPI nesta etapa; apenas configuração e Git local.
+- O repositório está no GitHub em `EricMariano/jev-lanes`. A candidata local é
+  `0.1.0rc1`; ainda não publicada no PyPI. O workflow `release.yml` publica por OIDC
+  quando uma GitHub Release é publicada e o job do ambiente `pypi` é aprovado,
+  após configurar as proteções e o Trusted Publisher; ver RELEASE.md.
 
 ## ADRs
 
@@ -115,27 +118,32 @@ Verificados na documentação oficial e no JSON público do PyPI; reconferir ant
 Implicação: o `state` enviado ao TypeSafe sai do ambiente do usuário, então o adaptador
 precisa permitir escolher o que é enviado (ver decisões de payload acima).
 
-## Questões abertas antes do adaptador
+## Contratos fechados para a candidata v0.1
 
-- Esquema exato da chave de estado: tipos, reducers e histórico entre execuções.
-- Reutilização de `attach()` em subgrafos e destinos especiais além de `END`.
-- Esquema de estado: o usuário declara `state_key` no schema do grafo; avaliar um helper
-  para evitar esse passo manual e definir se o histórico entre episódios é preservado.
-- Execução assíncrona (`ainvoke`) fica fora do MVP; o `langchain-typesafe` já implementa
-  `ainvoke`, então um adaptador async é viável depois.
-- Smoke test real (2026-10-20, `tests/live/`): o TypeSafe devolveu `billing` com
-  confiança 1.0 num caso inequívoco e o `gpt-5-nano` respondeu no formato esperado
-  (rota ou `ABSTAIN`), inclusive abstendo-se num texto sem sentido. Foi uma execução com
-  quatro casos fáceis; falta medir a confiabilidade do formato de texto livre e a
-  distribuição de confiança em dados reais e ambíguos.
-- O fallback padrão dos testes live é `openai:gpt-5-nano`, o modelo de texto mais barato
-  da tabela de preços da OpenAI em 2026-10-20. É um modelo de raciocínio e não aceita
-  `temperature=0`; reavaliar a escolha pelo preço quando houver benchmark.
-- Piso e teto de versão de `langchain-typesafe`: a versão mais recente é alfa e pode
-  mudar sem aviso; decidir se fixamos um intervalo estreito e como testamos contra ela.
-- Plug and play exige chamadas reais a TypeSafe e a um LLM: definir testes de integração
-  opt-in (com chaves do mantenedor, fora da suíte padrão) e um modo de demonstração.
-- Publicação: repositório remoto, identidade do pacote e trusted publishing no PyPI.
+- O usuário declara `<name>_route: dict[str, Any]` no estado do grafo, sem reducer.
+  A chave recebe `RouteTrace.to_dict()` e é substituída a cada episódio; o histórico
+  fica nos snapshots do checkpointer, conforme sua política de retenção. O rastro não
+  contém o caso, mas o restante do estado e os checkpoints podem contê-lo.
+- `targets` deve mapear exatamente as rotas. Destinos compartilhados e `END` são
+  suportados e cobertos pela comparação entre ligação manual e `attach()`.
+- Dependências ficam em intervalos limitados por versão principal, com
+  `langchain-typesafe>=0.0.1a3,<0.1`. O lockfile fixa o ambiente de desenvolvimento/CI;
+  mudanças do provedor devem passar pela suíte offline e por smoke tests opt-in.
+- Existem testes reais opt-in em `tests/live/`, bateria sintética separada e demos
+  offline completas. O modelo padrão dessas verificações é `openai:gpt-5-nano`;
+  o usuário pode escolher outro modelo e instalar seu provedor.
+
+## Questões abertas e extensões posteriores
+
+- Helper para declarar a chave de estado, sem alterar o contrato explícito do MVP.
+- Documentar/testar composição com subgrafos e destinos especiais além de `END`
+  antes de prometer suporte. Isso não bloqueia o fluxo síncrono atual.
+- Execução assíncrona fica fora do MVP.
+- Avaliação em dados reais: obter rótulos independentes, ajustar limiares em um split
+  e avaliar no outro. A bateria sintética de 37 casos mostrou confiança elevada em
+  casos ambíguos; não demonstrou benefício do fallback. Ver `benchmarks/results/`.
+- Confirmar identidade do pacote na publicação e configurar o Trusted Publisher
+  no PyPI e o ambiente protegido no GitHub. O workflow está preparado, sem upload.
 
 ## Fontes consultadas
 
