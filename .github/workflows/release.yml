@@ -31,6 +31,7 @@ jobs:
       - run: uv run --offline --no-sync ruff format --check .
       - run: uv run --offline --no-sync mypy
       - run: uv run --offline --no-sync pytest
+      - run: uv run --offline --no-sync python examples/atendimento/demo.py
       - run: uv build
       - run: uvx --from 'twine>=7,<8' twine check --strict dist/*
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

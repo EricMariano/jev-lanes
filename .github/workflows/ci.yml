@@ -26,4 +26,5 @@ jobs:
       - run: uv run --offline --no-sync ruff format --check .
       - run: uv run --offline --no-sync mypy
       - run: uv run --offline --no-sync pytest
+      - run: uv run --offline --no-sync python examples/atendimento/demo.py
       - run: uv build
