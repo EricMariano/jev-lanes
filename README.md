@@ -1,246 +1,207 @@
 # jev-lanes
 
-Confidence-based routing and escalation policies for Jev and LangGraph.
+Confidence-gated tools for LangGraph agents, with [Jev](https://docs.typesafe.ai/confidence)
+(TypeSafe) as the classifier.
 
-**v0.1 release candidate:** the repository implements confidence-band selection, the
-serializable `RouteTrace`, the `Classifier`/`FallbackModel` protocols, offline fakes and
-`JevRouter`, which wires the three lanes and a resumable human review into a LangGraph
-`StateGraph`, plus default adapters for TypeSafe and any LangChain chat model (bring your
-own keys). Offline examples and a five-minute notebook demonstrate the full flow.
-The [37-case synthetic smoke battery](benchmarks/results/2026-10-20-battery.md)
-shows integration behavior; it does not establish decision quality or calibrated
-thresholds. A [Banking77 evaluation](benchmarks/results/banking77/report.md) of the
-policy on public data found no benefit from the fallback model (see
-[Evidence](#evidence)). `langchain-typesafe` itself is an alpha release. The package has not been
-published to PyPI; install from this checkout.
+**Status:** release candidate, not published to PyPI (install from this checkout). The
+package name comes from an earlier three-lane design and may change before any
+publication. `langchain-typesafe` itself is an alpha release.
 
 ## Why
 
-Routing needs an explicit policy for uncertainty: when to accept a classifier's
-decision, ask another model, or request human judgment. This project aims to make
-that policy testable and auditable, including resuming a graph after human review.
+A tool-calling agent decides *what* to do with a language model, and nothing in that
+decision says how sure anyone is that it understood the customer. For a read-only lookup
+that hardly matters; for a refund it does. `jev-lanes` puts a second opinion in front of
+every tool call: Jev classifies the conversation, and each tool declares the confidence it
+needs before it may run.
 
-The implemented flow is:
-
-```text
-Jev Choice -> confidence band
-               auto  -> validated Jev route
-               llm   -> fallback model -> validated route or human review
-               human -> interrupt -> validated human decision -> route
+```python
+GatedTool(order_status, intents=["orders"], min_confidence=0.50)  # read-only
+GatedTool(refund, intents=["billing"], min_confidence=0.90)  # cannot be undone
 ```
+
+## How it works
 
 ```mermaid
 flowchart LR
-    A[Classify] --> B{Confidence band}
-    B -->|auto| R[Validated route]
-    B -->|llm| L[Fallback model]
-    B -->|human| H[Human review interrupt]
-    L -->|valid route| R
-    L -->|abstains or unknown route| H
-    H -->|resume with valid route| R
+    S[start] --> A[agent: model answers or proposes tool calls]
+    A -->|no tool call| E[END]
+    A -->|tool calls| G{gate: Jev classifies the conversation}
+    G -->|every call allowed| T[tools run]
+    T --> A
+    G -->|any call blocked| Q[ask the customer one question]
+    Q -->|interrupt, resume with the answer| A
+    G -->|blocked, questions used up| R[fixed refusal]
 ```
 
-The fallback model's benefit must be evaluated; the one evaluation so far did not show one
-(see [Evidence](#evidence)). A valid route name alone does not
-establish a correct decision. Jev confidence is a distribution statistic, not an
-accuracy guarantee; thresholds depend on the task and its consequences.
+- A call is allowed when Jev's intent is one of the tool's `intents` **and** its confidence
+  is at least `min_confidence` (equality allows). A confident but different intent blocks
+  the call too.
+- All or nothing: if one call in a step is blocked, none run. Every call still gets an
+  error result, because providers require one per call.
+- A blocked step makes the agent ask the customer one short question. The graph pauses on
+  LangGraph's `interrupt()` and continues when you resume it with the answer. Classification
+  is not repeated on resume.
+- After `max_clarifications` questions (default 2) the turn ends with a fixed refusal. No
+  tool with a side effect has run.
+- Jev is called only when the model proposes a tool call, so small talk costs nothing. A
+  provider failure raises; it is never turned into a low confidence.
+- There is no human-review step. Handing off to a person, if you want it, is a tool.
 
-## Try the current policy locally
+## Try it offline
 
-Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
-From this checkout:
+No keys, no network:
 
 ```bash
 uv sync --locked --dev
-uv run python examples/policy.py
-```
-
-For an application environment, `python -m pip install .` installs the package from
-the checkout. No provider keys are needed to import it or run the offline examples.
-
-```python
-from jev_lanes import Lanes
-
-# Illustrative thresholds, not calibrated defaults.
-lanes = Lanes(auto=0.85, llm=0.60)
-assert lanes.lane_for(0.95) == "auto"
-assert lanes.lane_for(0.70) == "llm"
-assert lanes.lane_for(0.40) == "human"
-```
-
-## Try the router offline
-
-`examples/router_offline.py` runs all three lanes and a human review resumed with a
-checkpointer, using fakes instead of providers:
-
-```bash
-uv run python examples/router_offline.py
+uv run python examples/atendimento/demo.py
 ```
 
 ```python
-from typing import Any, TypedDict
+from langchain_core.messages import HumanMessage
+from langchain_core.tools import tool
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
 
-from langgraph.graph import END, START, StateGraph
-
-from jev_lanes import Classification, JevRouter, Lanes
-from jev_lanes.testing import FakeFallback, FakeJevClassifier
-
-
-class State(TypedDict, total=False):
-    messages: list[str]
-    support_route: dict[str, Any]
-    handled_by: str
+from jev_lanes import Classification, GatedAgent, GatedTool
+from jev_lanes.testing import FakeChatModel, FakeJevClassifier, tool_call_message
 
 
-router = JevRouter(
-    name="support",
-    routes={"orders": "Order status questions", "billing": "Invoices and payments"},
-    lanes=Lanes(auto=0.85, llm=0.60),
-    classifier=FakeJevClassifier(Classification("orders", 0.95)),
-    fallback=FakeFallback(),
+@tool
+def refund(order_id: str) -> str:
+    """Refund an order in full."""
+    return f"{order_id} refunded"
+
+
+agent = GatedAgent(
+    model=FakeChatModel(
+        tool_call_message("refund", {"order_id": "A1"}, id="1"),
+        "Which order, and what went wrong?",
+        tool_call_message("refund", {"order_id": "A1"}, id="2"),
+        "Refunded.",
+    ),
+    tools=[GatedTool(refund, intents=["billing"], min_confidence=0.9)],
+    intents={"billing": "Charges and refunds.", "orders": "Delivery and tracking."},
+    classifier=FakeJevClassifier(Classification("billing", 0.6), Classification("billing", 0.96)),
 )
-builder = StateGraph(State)
-builder.add_node("intake", lambda state: {})
-builder.add_node("orders", lambda state: {"handled_by": "orders"})
-builder.add_node("billing", lambda state: {"handled_by": "billing"})
-builder.add_edge(START, "intake")
-router.attach(builder, after="intake")  # route names are the target node names
-builder.add_edge("orders", END)
-builder.add_edge("billing", END)
-result = builder.compile().invoke({"messages": ["Where is my parcel?"]})
-assert result["handled_by"] == "orders"
+graph = agent.compile(InMemorySaver())  # asking needs a checkpointer and a stable thread_id
+config = {"configurable": {"thread_id": "t1"}}
+
+paused = graph.invoke({"messages": [HumanMessage("I want my money back")]}, config)
+print(paused["__interrupt__"][0].value)  # {'question': 'Which order, ...?', 'round': 1}
+done = graph.invoke(Command(resume="Order A1 arrived broken"), config)
+print(done["messages"][-1].text)  # Refunded.
 ```
 
-- Declare `router.state_key` (here `support_route`) in your graph state schema; it holds
-  the serializable `RouteTrace`. Every invocation starts a new episode.
-- By default the state's `messages` are sent to the providers; pass `extract=` to send
-  something else or to redact. Case text is never stored in the trace or in the
-  review request.
-- The fallback model abstaining or naming an unknown route escalates to human review; an
-  unknown answer is recorded in the trace as `<invalid route>`, not verbatim.
-- Each router attached to a graph needs its own `name`.
-  Provider failures raise; they are not converted into a low confidence.
-- Human review needs a checkpointer and a stable `thread_id`. Resume with
-  `Command(resume="<route>")`; an unknown route is rejected and can be sent again.
-  Resuming does not classify again.
-- Sync only; requires `langgraph>=1.2.12`.
-- The trace replaces its previous episode in `<name>_route` (no list reducer).
-  Checkpointers retain state snapshots according to their own retention policy, including
-  the case text in `messages`. `InMemorySaver` only persists within the current process.
-
-## Full demos
-
-```bash
-uv run --offline --no-sync python examples/atendimento/demo.py
-uv run --offline --no-sync python examples/manual_routing.py
-```
-
-The [customer-service demo](examples/atendimento/README.md) handles orders, billing and
-account questions. It demonstrates fallback abstention, an invalid human response and
-successful resumption without reclassifying. Human responses are scripted.
-
-The [manual example](examples/manual_routing.py) expands the edges that `attach()`
-adds, using the same public node methods. Behavior comparisons cover all three lanes,
-invalid review/retry, provider failures, mapped/shared destinations, `END` and a new
-episode. This comparison validates graph wiring, not accuracy or a speed advantage.
-
-Open [the five-minute notebook](examples/quickstart.ipynb) in a notebook editor using
-the project interpreter, or execute it from the terminal:
-
-```bash
-uv sync --locked --dev --group notebook
-uv run --offline --no-sync python examples/execute_notebook.py
-```
-
-The executed copy goes to `build/quickstart.executed.ipynb`; source cells stay clean.
+The [customer-service demo](examples/atendimento/demo.py) walks three conversations: a
+clear request that acts, a vague one that asks and then acts, and one that never becomes
+clear and is refused. The classifier there is scripted, so it shows the wiring, not how
+well Jev classifies.
 
 ## Use real providers (bring your own keys)
 
 ```python
-from jev_lanes.adapters import JevClassifier, LangChainFallback
+from langchain.chat_models import init_chat_model
 
-router = JevRouter(
-    name="support",
-    routes={"orders": "...", "billing": "...", "other": "Anything else."},
-    lanes=Lanes(auto=0.85, llm=0.60),
+from jev_lanes.adapters import JevClassifier
+
+agent = GatedAgent(
+    model=init_chat_model("openai:gpt-5-nano"),  # any tool-calling LangChain chat model
+    tools=[...],
+    intents={...},
     classifier=JevClassifier(),  # reads TYPESAFE_API_KEY
-    fallback=LangChainFallback("openai:gpt-5-nano"),
 )
 ```
 
-`JevClassifier` asks TypeSafe a `Choice` whose criteria are your routes (add an `other`
-route when they may not cover every input). `LangChainFallback` takes a `BaseChatModel`
-or an `init_chat_model` string; install the provider package yourself (for example
-`langchain-openai`) and set that provider's key. Keys are never stored or forwarded by
-this package. The case text is sent to TypeSafe and, for medium-confidence cases, to the
-fallback provider. `examples/byok.py` is a complete example; it calls real services and
-is not run in CI.
-
-The fallback model is asked for a route name or `ABSTAIN` in plain text, and the reply
-is checked against your routes: anything else escalates to human review.
+`JevClassifier` asks TypeSafe a `Choice` whose criteria are your intents. Install your chat
+model's provider package (for example `langchain-openai`) and set its key.
+[`examples/atendimento/byok.py`](examples/atendimento/byok.py) is a complete chat loop; it
+calls real services and is not run in CI. Keys are never stored or forwarded by this package.
 
 ## Evidence
 
-The policy was evaluated once on [Banking77](https://huggingface.co/datasets/PolyAI/banking77)
-(English banking intents grouped into four routes; thresholds chosen on 231 calibration
-cases, then applied once to 770 test cases; `gpt-5-nano` as fallback). Full method, tables
-and limitations: [report](benchmarks/results/banking77/report.md).
+Evaluated once on [Banking77](https://huggingface.co/datasets/PolyAI/banking77) (66 intents
+grouped into four routes, 11 held-out intents with no correct route; 770 test messages).
+Full method, sweep and limitations: [gate report](benchmarks/results/banking77/gate-report.md).
 
-- Jev's confidence is informative: AUROC 0.884 for correct vs wrong routes.
-- The 95% automatic-accuracy target was not reached on calibration. At the chosen
-  thresholds the three-lane policy automated 77.4% of cases at 90.6% accuracy; Jev plus
-  human review (no fallback) automated 57.5% at 94.4%.
-- **The fallback did not help.** In the llm lane Jev was right on 25 of 30 in-scope cases
-  and the fallback on 23 (0 fixed, 2 broken). Below the auto threshold overall, it fixed 12
-  and broke 16 (sign test p = 0.57). Treat the fallback as an unproven option: measure it
-  on your own labelled data before relying on it, and prefer sending medium-confidence
-  cases to people if reviewers have capacity.
-- Out-of-scope messages were still routed automatically when Jev was confident.
+At the threshold fixed before the run (0.995), with the same Jev answers throughout:
 
-One dataset, one run, one fallback model, English only: this is not an accuracy claim for
-your domain. Public data are shared under CC BY 4.0; see the
-[attribution](benchmarks/banking77/README.md#attribution).
+| Policy | Served correctly | Harmful acts | In-scope customers not served |
+|---|---|---|---|
+| always act on Jev's route | 608 | 162 | 0 |
+| gate, no questions | 418 | 25 | 238 |
+| gate, up to 2 questions | 501 | 41 | 155 |
 
-## The lane policy
+A harmful act is an action on the wrong route or on a message the desk cannot serve.
 
-Thresholds must satisfy `0 <= llm < auto <= 1`. Equality with either threshold
-selects the higher band. Invalid confidence raises an error; a provider failure
-is not treated as a low-confidence decision. The package itself never calls external
-services; only the providers you inject do.
+- **The gate works as a brake.** It cuts harmful acts from 162 to 25.
+- **Asking recovers some blocked customers**: 83 of the 238, none of them sent to a wrong
+  route. The extra 16 harmful acts are all out-of-scope messages that Jev, with no
+  catch-all route, still pushed into one of the four routes.
+- **Asking is only a little better than lowering the threshold.** Against a plain gate with
+  the same budget of harmful acts, the gain at the fixed threshold is +9 customers served
+  (95% interval −8 to +26): not distinguishable from zero. At thresholds 0.7–0.95 it is
+  +19 to +24 (about 2.5–3% of customers). This comparison was added after seeing the first
+  numbers.
+- **The simulated customer favours asking.** The reply to the agent's question is another
+  Banking77 message of the same intent, always fluent and on topic. Real customers may add
+  nothing or not answer, so read the gain as an upper bound.
+
+Not measured: the agent's language model (which tool it proposes, how it phrases the
+question), real customers, other languages or domains. One dataset, one run. Confidence is
+a distribution statistic, not an accuracy guarantee; choose `min_confidence` per tool with
+your own labelled data.
+
+### What did not work
+
+The first design routed medium-confidence cases to a second LLM. On the same data it did
+not help: of 134 cases below the automatic threshold it fixed 12 of Jev's answers and broke
+16 (sign test p = 0.57), and the 95% automatic-accuracy target was not reached. That design
+was dropped. The [report](benchmarks/results/banking77/report.md) is kept as history.
+
+## Privacy and security
+
+- The package calls no service itself; the providers you inject do. The conversation text
+  goes to TypeSafe and to your chat model's provider. By default the classifier receives only
+  customer and assistant text, not tool calls or tool results; pass `extract=` to the agent
+  to restrict or redact further.
+- `GateTrace` (state key `gate`) records tool, intent, confidence, requirement and outcome.
+  It never holds message text or tool arguments. Graph state and checkpoints do hold the
+  messages; retention is your checkpointer's policy.
+- The gate decides *whether* a tool may run, not *with which arguments*. Validate arguments
+  inside the tool, and treat the customer's replies as untrusted input to the model.
+
+See [SECURITY.md](SECURITY.md).
 
 ## Development
 
 ```bash
+uv sync --locked --dev
 uv run --offline --no-sync ruff check .
 uv run --offline --no-sync ruff format --check .
 uv run --offline --no-sync mypy
 uv run --offline --no-sync pytest
-uv build
+uv run --offline --no-sync python examples/atendimento/demo.py
 ```
 
-Install dependencies with `uv sync --locked --dev` before running offline checks.
-The CI workflow targets Python 3.10–3.14. Distribution builds require a cached
-build backend or network access.
+Python 3.10+; CI covers 3.10–3.14. Synchronous only; requires `langgraph>=1.2.12`.
 
 ## Repository
 
-- `src/jev_lanes/`: public policy primitives, with type annotations
-  (`lanes`, `trace`, `protocols`, `router`, `adapters`, and `testing` fakes for offline tests).
-- `tests/`: deterministic offline tests.
-- `examples/`: policy, offline router, customer-service and manual wiring examples,
-  a five-minute notebook, and a BYOK example that needs keys.
-- `benchmarks/`: synthetic smoke results, the Banking77 evaluation, and the protocol for a
-  real-data evaluation in your own domain.
-- [Glossary](GLOSSARY.md): domain terminology.
-- [Contributing](CONTRIBUTING.md): local workflow and evaluation expectations.
-- [Changelog](CHANGELOG.md).
+- `src/jev_lanes/`: `GatedTool` (`gate.py`), `GatedAgent` (`agent.py`), `GateTrace`
+  (`trace.py`), the `Classifier` protocol, the TypeSafe `adapters`, and `testing` fakes.
+- `tests/`: deterministic offline tests, including the replay logic of the evaluation.
+- `examples/atendimento/`: offline demo and a bring-your-own-keys chat.
+- `benchmarks/`: the Banking77 gate evaluation (`clarify.py`, `gate_report.py`) and the
+  archived three-lane evaluation.
+- [Glossary](GLOSSARY.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ## Naming and related work
 
 [`langgraph-jev-router`](https://pypi.org/project/langgraph-jev-router/) is an existing
-third-party project. This is a separate project centered on an explicit three-band
-escalation policy. `jev-lanes` returned HTTP 404 from PyPI's public project JSON
-endpoint on 2026-10-19; that is not a reservation or publication guarantee.
+third-party project. This is a separate project. `jev-lanes` returned HTTP 404 from PyPI's
+public project JSON endpoint on 2026-10-19; that is not a reservation or publication
+guarantee, and the name no longer describes the design.
 
 ## References
 

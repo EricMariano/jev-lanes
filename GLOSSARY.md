@@ -1,29 +1,54 @@
-# Política de decisão e escalada
+# Ferramentas controladas por confiança
 
-Vocabulário para decisões de roteamento e tratamento explícito da incerteza.
+Vocabulário do projeto: um agente só executa uma ferramenta quando a leitura do pedido pelo
+classificador é clara o suficiente para aquela ferramenta.
 
 ## Linguagem
 
-**Rota (route)**:
-Um destino permitido para uma solicitação, descrito pelo domínio da aplicação.
+**Intenção (intent)**:
+O que o cliente quer, descrito pelo domínio da aplicação. É o que o classificador escolhe.
+_Evitar_: rota, quando se fala de agentes; "rota" é o nome usado no protocolo `Classifier`.
 
 **Confiança (confidence)**:
 Estatística que resume a distribuição de probabilidades de uma resposta do Jev.
 Não representa uma garantia de acerto no domínio da aplicação.
 _Evitar_: acurácia, certeza de acerto.
 
-**Faixa (lane)**:
-Intervalo de confiança que determina quem deve decidir: Jev, modelo de reserva ou humano.
+**Ferramenta controlada (gated tool)**:
+Ferramenta do agente acompanhada das intenções que ela atende e da confiança mínima exigida.
 
-**Política de escalada**:
-Conjunto de regras que determina quando aceitar uma decisão e quando solicitar outra avaliação.
+**Confiança mínima (min_confidence)**:
+Confiança que o classificador precisa atingir (igualdade basta) para a ferramenta rodar.
+Ferramentas difíceis de desfazer pedem valores mais altos.
 
-**Modelo de reserva (fallback LLM)**:
-Modelo consultado para uma nova avaliação quando a política não aceita automaticamente a decisão inicial.
+**Verificação (check)**:
+Comparação de uma chamada de ferramenta proposta com a classificação. Resulta em `allowed`,
+`low_confidence` ou `intent_mismatch` (a intenção classificada não é uma das da ferramenta,
+mesmo com confiança alta).
 
-**Revisão humana (human review)**:
-Etapa na qual uma pessoa recebe o caso para decidir como prosseguir.
-_Evitar_: usar como sinônimo de uma rota de atendimento chamada “humano”.
+**Passo bloqueado**:
+Passo em que ao menos uma chamada proposta não foi permitida. Nenhuma chamada do passo roda.
 
-**Rastro de decisão (route trace)**:
-Registro das avaliações e da decisão final de um episódio de roteamento.
+**Esclarecimento (clarification)**:
+Pergunta curta ao cliente depois de um passo bloqueado. O grafo pausa em `interrupt()` e
+continua quando recebe a resposta.
+_Evitar_: revisão humana; quem responde é o cliente, não um atendente.
+
+**Recusa (refusal)**:
+Mensagem fixa que encerra o turno quando as perguntas se esgotam sem confiança suficiente.
+Nenhuma ferramenta com efeito colateral rodou.
+
+**Turno (turn)**:
+Uma invocação do grafo. Cada invocação começa com um rastro vazio.
+
+**Rastro do gate (gate trace)**:
+Registro das verificações e das perguntas de um turno. Nunca guarda texto de mensagens nem
+argumentos de ferramentas.
+
+**Ato nocivo (harmful act)**:
+Termo da avaliação: executar a ferramenta de uma intenção errada, ou executar qualquer
+ferramenta para uma mensagem que o atendimento não cobre.
+
+**Cliente simulado**:
+Na avaliação, a resposta à pergunta é outra mensagem do dataset com a mesma intenção. Favorece
+a pergunta; os ganhos medidos são um limite superior.
