@@ -24,6 +24,7 @@ jobs:
       - run: uv sync --locked --dev
       - run: uv run --offline --no-sync ruff check .
       - run: uv run --offline --no-sync ruff format --check .
+      - run: uv run --offline --no-sync mypy
       - run: uv run --offline --no-sync pytest
       - run: uv run --offline --no-sync python examples/policy.py
       - run: uv run --offline --no-sync python examples/router_offline.py

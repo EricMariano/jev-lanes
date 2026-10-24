@@ -44,6 +44,18 @@ Public data (Banking77, PolyAI, CC BY 4.0), labels by the dataset's authors, rou
 
 The fallback is called only for cases in the llm lane; its recorded answer is used. Abstentions and unknown routes escalate.
 
+## Does the fallback help where it is consulted? (test, in-scope cases)
+
+Jev and the fallback answered the same messages, so they can be compared directly. "Fixed" means Jev was wrong and the fallback right; "broken" means the opposite. The fallback only helps if fixed > broken. Abstentions count as misses (the policy escalates them instead). The p-value is an exact sign test on fixed vs broken.
+
+| Jev confidence band | n | Jev correct | Fallback correct | Fixed | Broken | Abstained | p |
+|---|---|---|---|---|---|---|---|
+| llm lane [0.9, 0.95) | 30 | 25 (83%) | 23 (77%) | 0 | 2 | 0 | 0.50 |
+| below the auto threshold [0, 0.95) | 134 | 91 (68%) | 87 (65%) | 12 | 16 | 1 | 0.57 |
+| [0, 0.9) (human lane) | 104 | 66 (63%) | 64 (62%) | 12 | 14 | 1 | 0.85 |
+
+Small samples: a difference here is not significant unless p is small, and an equal split does not show the fallback is harmless either. The bands are not independent of the thresholds chosen on calibration.
+
 ## Descriptive sweep on the test set (not used for selection)
 
 | Jev + human, auto ≥ | Automated | Accuracy of automated | Held-out routed |

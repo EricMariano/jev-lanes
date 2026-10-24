@@ -1,7 +1,32 @@
 # Avaliação — planejamento
 
-Nenhum benchmark foi executado. Testes unitários comprovam a mecânica da política,
-não a qualidade das decisões ou a calibração dos limiares.
+Testes unitários comprovam a mecânica da política, não a qualidade das decisões nem a
+calibração dos limiares. Há duas avaliações registradas, ambas com limites claros:
+
+- **Banking77** ([banking77/README.md](banking77/README.md),
+  [relatório](results/banking77/report.md)): dados públicos em inglês, rótulos dos autores
+  do dataset, limiares escolhidos numa amostra de calibração e avaliados uma vez em 770
+  casos de teste, com a mesma estrutura do protocolo abaixo. É uma avaliação em dados
+  públicos de outro domínio, não em mensagens reais do usuário do pacote.
+- **Bateria de fumaça** (abaixo): 37 casos sintéticos, só para ver o comportamento.
+
+### O que o Banking77 mostrou (uma execução, `gpt-5-nano`)
+
+- O alvo de ≥ 95% de acerto automático **não foi atingido** na calibração, com ou sem
+  fallback. No teste, três faixas (auto ≥ 0,95, llm ≥ 0,9) automatizaram 77,4% dos casos
+  com 90,6% de acerto; Jev + humano (auto ≥ 0,995) automatizou 57,5% com 94,4%.
+- A confiança do Jev separa acertos de erros de forma útil, mas imperfeita (AUROC 0,884
+  entre casos do escopo; 0,818 contra mensagens fora do escopo).
+- **O fallback não ajudou onde foi consultado.** Na faixa `llm` do teste (30 casos do
+  escopo) o Jev acertou 25 e o fallback 23: corrigiu 0 e piorou 2. Em todos os casos
+  abaixo do limiar `auto` (134), o fallback corrigiu 12 respostas do Jev e piorou 16
+  (teste do sinal, p = 0,57). Não há evidência de que melhore a decisão, nem de que a
+  piore de forma significativa; as amostras são pequenas.
+- Mensagens fora do escopo continuam sendo roteadas automaticamente quando o Jev está
+  confiante (40 de 110 com três faixas).
+
+Estes números valem para este dataset, estas rotas e estes modelos. Não os cite como
+desempenho esperado em outro domínio.
 
 Existe uma **bateria de fumaça**, que não é benchmark: `smoke_battery.py` roda 37 casos
 sintéticos rotulados pelos mantenedores contra os serviços reais (com as suas chaves) e
@@ -23,8 +48,10 @@ Concordância entre modelos não substitui comparação com rótulos independent
 
 ## Protocolo para a avaliação real
 
-O dataset real ainda não está disponível. Não substituir essa etapa por mais casos
-sintéticos nem usar os resultados abaixo para escolher limiares de produção.
+Os dados reais do domínio do usuário não estão neste repositório. O Banking77 aplicou
+este protocolo a um dataset público; não substituir a avaliação no seu domínio por ele,
+nem por mais casos sintéticos, e não usar os resultados registrados para escolher
+limiares de produção.
 
 1. Definir rotas, critérios de desempate e quando a resposta correta é pedir
    esclarecimento ou revisão humana. A rota `other` não significa automaticamente

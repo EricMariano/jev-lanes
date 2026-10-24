@@ -7,6 +7,7 @@ from langgraph.types import Command
 from pydantic import ValidationError
 
 from jev_lanes import Classification, JevRouter, Lanes, RouteTrace
+from jev_lanes.router import INVALID_ROUTE
 from jev_lanes.testing import FakeFallback, FakeJevClassifier
 
 ROUTES = {"orders": "Order status questions", "billing": "Invoices and payments"}
@@ -103,6 +104,16 @@ class TestLlmLane:
         trace = trace_of(resumed)
         assert [e.evaluator for e in trace.evaluations] == ["jev", "llm", "human"]
         assert trace.evaluations[-1].reason == reason
+
+    def test_unknown_fallback_answer_is_not_stored_in_the_trace(self):
+        secret = "my card number is 4111 1111 1111 1111"
+        classifier = FakeJevClassifier(Classification("orders", 0.7))
+        graph = build(make_router(classifier, FakeFallback(secret)), checkpointer=InMemorySaver())
+        paused = graph.invoke(CASE, CONFIG)
+        llm_step = trace_of(paused).evaluations[-1]
+        assert llm_step.route == INVALID_ROUTE
+        assert secret not in repr(paused["__interrupt__"][0].value)
+        assert secret not in repr(paused["support_route"])
 
 
 class TestHumanLane:
@@ -251,3 +262,10 @@ class TestConfiguration:
                 after="intake",
                 targets={"orders": "o", "billing": "b", "refunds": "r"},
             )
+
+    def test_attaching_two_routers_with_the_same_name_fails_clearly(self):
+        builder = StateGraph(State)
+        builder.add_node("intake", lambda state: {})
+        make_router(FakeJevClassifier()).attach(builder, after="intake")
+        with pytest.raises(ValueError, match="needs its own name"):
+            make_router(FakeJevClassifier()).attach(builder, after="intake")

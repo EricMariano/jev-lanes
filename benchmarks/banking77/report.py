@@ -61,6 +61,30 @@ def auroc(positive: list[float], negative: list[float]) -> float:
     return wins / (len(positive) * len(negative))
 
 
+def sign_test(fixed: int, broken: int) -> float:
+    """Exact two-sided p-value for ``fixed`` vs ``broken`` under a fair coin (McNemar)."""
+    n = fixed + broken
+    if n == 0:
+        return 1.0
+    tail = sum(math.comb(n, i) for i in range(min(fixed, broken) + 1)) / 2**n
+    return min(1.0, 2 * tail)
+
+
+def fallback_vs_jev(rows: list[dict]) -> dict:
+    """Compare Jev and the fallback on the same in-scope rows (held-out rows have no answer)."""
+    scope = [r for r in rows if r["route"]]
+    jev_ok = [r["jev_route"] == r["route"] for r in scope]
+    llm_ok = [r["llm_answer"] == r["route"] for r in scope]
+    return dict(
+        n=len(scope),
+        jev=sum(jev_ok),
+        llm=sum(llm_ok),
+        fixed=sum(not j and f for j, f in zip(jev_ok, llm_ok, strict=True)),
+        broken=sum(j and not f for j, f in zip(jev_ok, llm_ok, strict=True)),
+        abstained=sum(r["llm_answer"] is None for r in scope),
+    )
+
+
 def usable(rows: list[dict]) -> list[dict]:
     """Provider failures are operational errors, never counted as escalations or answers."""
     return [r for r in rows if not r["jev_error"] and not r["llm_error"]]
@@ -276,6 +300,43 @@ def build(cal_name: str, test_name: str) -> str:
     add(
         "The fallback is called only for cases in the llm lane; its recorded answer is used. "
         "Abstentions and unknown routes escalate."
+    )
+    add("")
+
+    add("## Does the fallback help where it is consulted? (test, in-scope cases)")
+    add("")
+    add(
+        "Jev and the fallback answered the same messages, so they can be compared directly. "
+        '"Fixed" means Jev was wrong and the fallback right; "broken" means the opposite. '
+        "The fallback only helps if fixed > broken. Abstentions count as misses (the policy "
+        "escalates them instead). The p-value is an exact sign test on fixed vs broken."
+    )
+    add("")
+    add(
+        "| Jev confidence band | n | Jev correct | Fallback correct | Fixed | Broken | Abstained | p |"
+    )
+    add("|---|---|---|---|---|---|---|---|")
+    bands = (
+        (f"llm lane [{llm3}, {auto3})", llm3, auto3),
+        (f"below the auto threshold [0, {auto3})", 0.0, auto3),
+        (f"[0, {llm3}) (human lane)", 0.0, llm3),
+    )
+    for label, low, high in bands:
+        band = [r for r in test if low <= r["jev_confidence"] < high]
+        c = fallback_vs_jev(band)
+        if not c["n"]:
+            add(f"| {label} | 0 | n/a | n/a | n/a | n/a | n/a | n/a |")
+            continue
+        add(
+            f"| {label} | {c['n']} | {c['jev']} ({100 * c['jev'] / c['n']:.0f}%) | "
+            f"{c['llm']} ({100 * c['llm'] / c['n']:.0f}%) | {c['fixed']} | {c['broken']} | "
+            f"{c['abstained']} | {sign_test(c['fixed'], c['broken']):.2f} |"
+        )
+    add("")
+    add(
+        "Small samples: a difference here is not significant unless p is small, and an equal "
+        "split does not show the fallback is harmless either. The bands are not independent "
+        "of the thresholds chosen on calibration."
     )
     add("")
 

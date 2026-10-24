@@ -88,9 +88,30 @@ Consultas HTTPS verificadas aos endpoints públicos:
 
 HTTP 404 indica ausência de projeto público naquele momento, não reserva do nome.
 
+## Resultado da avaliação no Banking77 e posição sobre o fallback (2026-10-23)
+
+Primeira avaliação com rótulos externos (Banking77, 770 casos de teste, `gpt-5-nano`,
+limiares escolhidos em 231 casos de calibração; relatório em
+`benchmarks/results/banking77/report.md`). Resultados e decisões:
+
+- A confiança do Jev é informativa (AUROC 0,884 entre acertos e erros), mas o alvo de 95%
+  de acerto automático não foi atingido na calibração.
+- O fallback não melhorou as decisões: na faixa `llm`, o Jev acertou 25 de 30 casos e o
+  fallback 23 (0 corrigidos, 2 piorados); abaixo do limiar `auto`, 12 corrigidos e 16
+  piorados (teste do sinal, p = 0,57). Uma execução, um modelo, inglês.
+- **Decisão:** o projeto mantém as três faixas como contrato, mas apresenta o fallback
+  como uma opção **não comprovada**, e não como um benefício. README e relatórios devem
+  citar este resultado; nenhum texto deve afirmar que o fallback reduz erros ou custo.
+- **Decisão:** não escolher limiares padrão a partir do Banking77; os limiares seguem
+  explícitos e específicos do domínio.
+- Aberto: tornar o fallback opcional (Jev + humano) é candidato a v0.2; ver PLAN.md.
+- Dados: as amostras em `benchmarks/results/banking77/*.jsonl` redistribuem textos do
+  dataset sob CC BY 4.0, com atribuição em `benchmarks/banking77/README.md`.
+
 ## Hipóteses a avaliar
 
-- Um LLM de reserva melhora as decisões nos casos de confiança intermediária.
+- Um LLM de reserva melhora as decisões nos casos de confiança intermediária. (No
+  Banking77, não: ver acima. Continua sendo uma hipótese para outros domínios e modelos.)
 - A política reduz custo ou latência sem ultrapassar o erro aceitável na automação.
 - Os limiares iniciais produzem volume de revisão humana operacionalmente viável.
 
@@ -120,6 +141,10 @@ precisa permitir escolher o que é enviado (ver decisões de payload acima).
 
 ## Contratos fechados para a candidata v0.1
 
+- Uma resposta do fallback que não é rota é registrada no rastro como `<invalid route>`
+  (constante `INVALID_ROUTE`), nunca literalmente: é saída de modelo e pode repetir o
+  texto do caso. `attach()` recusa um segundo roteador com o mesmo `name` no mesmo grafo.
+
 - O usuário declara `<name>_route: dict[str, Any]` no estado do grafo, sem reducer.
   A chave recebe `RouteTrace.to_dict()` e é substituída a cada episódio; o histórico
   fica nos snapshots do checkpointer, conforme sua política de retenção. O rastro não
@@ -141,7 +166,8 @@ precisa permitir escolher o que é enviado (ver decisões de payload acima).
 - Execução assíncrona fica fora do MVP.
 - Avaliação em dados reais: obter rótulos independentes, ajustar limiares em um split
   e avaliar no outro. A bateria sintética de 37 casos mostrou confiança elevada em
-  casos ambíguos; não demonstrou benefício do fallback. Ver `benchmarks/results/`.
+  casos ambíguos; não demonstrou benefício do fallback. O Banking77 aplicou o protocolo a
+  dados públicos (ver acima); falta o domínio de uso. Ver `benchmarks/results/`.
 - Confirmar identidade do pacote na publicação e configurar o Trusted Publisher
   no PyPI e o ambiente protegido no GitHub. O workflow está preparado, sem upload.
 

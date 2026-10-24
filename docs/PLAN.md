@@ -2,8 +2,9 @@
 
 ## Estado atual — Candidata v0.1 (`0.1.0rc1`)
 
-Atualizado em 2026-10-20. A implementação do fluxo está concluída. A avaliação com
-dados reais e a publicação no PyPI são etapas externas ainda pendentes; o pacote
+Atualizado em 2026-10-23. A implementação do fluxo está concluída e foi avaliada
+uma vez em dados públicos (Banking77). A avaliação em dados reais do domínio e a
+publicação no PyPI são etapas externas ainda pendentes; o pacote
 continua experimental, com limiares ilustrativos.
 
 ## Fundação
@@ -75,19 +76,39 @@ sentido ligados à sua configuração.
 - [x] Preparar candidata: versão/metadados, changelog, lockfile e workflow de publicação
   por Trusted Publishing, com instruções em `docs/RELEASE.md`.
 
+## Avaliação no Banking77 (2026-10-20)
+
+- [x] Protocolo aplicado a dados públicos: 231 casos de calibração, 770 de teste, regra de
+  seleção congelada antes da execução, relatório reprodutível (`benchmarks/banking77/`).
+- [x] Atribuição CC BY 4.0 dos dados e das amostras redistribuídas.
+- [x] Resultado: o alvo de 95% de acerto automático não foi atingido; Jev + humano
+  automatizou 57,5% a 94,4%, três faixas 77,4% a 90,6%.
+- [x] O fallback não ajudou: na faixa `llm`, 0 corrigidos e 2 piorados em 30 casos; abaixo
+  do limiar `auto`, 12 corrigidos e 16 piorados (p = 0,57). Não é evidência de dano
+  significativo, nem de benefício. Posição adotada: o fallback é uma opção não comprovada
+  e a documentação diz isso (README, DECISIONS).
+
 ## Pendências externas para publicação e validação de qualidade
 
 - [ ] Confirmar o nome no momento da publicação e configurar o Trusted Publisher na
   conta PyPI, com o ambiente `pypi` protegido no GitHub.
 - [ ] Publicar a versão revisada após CI verde, tag e aprovação do mantenedor.
-- [ ] Obter mensagens reais anonimizadas e rótulos independentes, definir o objetivo
-  operacional, separar calibração/teste e medir acerto/cobertura/custo/latência.
+- [ ] Obter mensagens reais anonimizadas e rótulos independentes do domínio de uso, definir
+  o objetivo operacional, separar calibração/teste e medir
+  acerto/cobertura/custo/latência.
 
-Não há dados reais rotulados neste repositório. Os 37 casos sintéticos mostram
-funcionamento e limitações, sem comprovar benefício do fallback ou calibração.
+Não há dados reais do domínio de uso neste repositório. Os 37 casos sintéticos mostram
+funcionamento; o Banking77 dá uma medida em dados públicos de outro domínio, sem
+comprovar benefício do fallback.
 
 ## v0.2 — Extensões candidatas
 
+- Fallback opcional (política Jev + humano, sem modelo de reserva): é a configuração que
+  atingiu a melhor precisão automática no Banking77. Exige permitir `("jev", "human")`
+  no rastro da faixa `llm`.
+- Teste do fallback com outros modelos e prompts, e com repetições, antes de recomendá-lo.
+- Tratamento de mensagens fora do escopo (rota `other`, rejeição de classe) — o Jev roteou
+  automaticamente 40 de 110 no teste.
 - Margem entre top1 e top2; guardrail `Noul` no mesmo request.
 - Política própria para `Score`, considerando a ordem dos níveis.
 - Execução async e tags de faixa no LangSmith.

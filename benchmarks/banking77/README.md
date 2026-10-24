@@ -8,7 +8,8 @@ there with its limitations.
 ## Data
 
 [Banking77](https://huggingface.co/datasets/PolyAI/banking77) (PolyAI, CC BY 4.0): 77 banking
-intents, 10,003 training and 3,080 test messages, English. The files are not stored in Git.
+intents, 10,003 training and 3,080 test messages, English. The original CSV files are not
+stored in Git; see [Attribution](#attribution) for what the result files contain.
 
 ```bash
 mkdir -p benchmarks/data/banking77 && cd benchmarks/data/banking77
@@ -50,6 +51,24 @@ Both providers answer every sampled case, so one run yields Jev alone, the fallb
 and the three-lane policy by replaying the recorded answers (the fallback never sees Jev's
 answer). A finished case is skipped on re-run. The report on a pilot is a smoke check only:
 pass the pilot as both calibration and test and do not quote the numbers.
+
+## Attribution
+
+The evaluation uses **Banking77**, released by PolyAI under the
+[Creative Commons Attribution 4.0 International license](https://creativecommons.org/licenses/by/4.0/):
+
+> Iñigo Casanueva, Tadas Temčinas, Daniela Gerz, Matthew Henderson and Ivan Vulić.
+> *Efficient Intent Detection with Dual Sentence Encoders.* 2020.
+> [arXiv:2003.04807](https://arxiv.org/abs/2003.04807). Data:
+> [PolyAI-LDN/task-specific-datasets](https://github.com/PolyAI-LDN/task-specific-datasets).
+
+Changes made by this project: we sampled subsets of the train and test files (seeded and
+stratified, see `run.py`), grouped intents into four routes and held out 11 intents (see
+`config.py`). The files in `../results/banking77/` (`*.jsonl`) contain the text of the
+sampled messages together with their original intent labels and the answers of the models
+under test. They are shared under the same license, and the dataset authors are not
+responsible for the models' outputs or for our grouping. This is an independent project and
+is not endorsed by PolyAI or the dataset authors.
 
 ## Not covered
 
