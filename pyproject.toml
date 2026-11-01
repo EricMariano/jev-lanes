@@ -32,7 +32,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["mypy>=1.13,<3", "pytest>=8.3,<10", "ruff>=0.11,<1"]
+dev = ["mypy>=1.13,<3", "pytest>=9.2.0,<10", "ruff>=0.11,<1"]
 # Provider package for the opt-in live tests; end users install their own provider.
 live = ["langchain-openai>=1,<2"]
 notebook = ["ipykernel>=6,<8", "nbclient>=0.10,<1", "nbformat>=5,<6"]
